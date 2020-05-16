@@ -65,7 +65,7 @@ protected:
     using ComplexVec = gko::matrix::Dense<std::complex<double>>;
     using ComplexMtx = gko::matrix::Csr<std::complex<double>>;
 
-    Csr() : mtx_size(532, 231), rand_engine(42) {}
+    Csr() : mtx_size(256, 256), rand_engine(132) {}
 
     void SetUp()
     {
@@ -365,8 +365,8 @@ TEST_F(Csr, AdvancedApplyToCsrMatrixIsEquivalentToRef)
     mtx->apply(alpha.get(), trans.get(), beta.get(), square_mtx.get());
     dmtx->apply(dalpha.get(), d_trans.get(), dbeta.get(), square_dmtx.get());
 
-    GKO_ASSERT_MTX_NEAR(square_dmtx, square_mtx, 1e-14);
     GKO_ASSERT_MTX_EQ_SPARSITY(square_dmtx, square_mtx);
+    GKO_ASSERT_MTX_NEAR(square_dmtx, square_mtx, 1e-14);
     ASSERT_TRUE(square_dmtx->is_sorted_by_column_index());
 }
 
@@ -380,8 +380,8 @@ TEST_F(Csr, SimpleApplyToCsrMatrixIsEquivalentToRef)
     mtx->apply(trans.get(), square_mtx.get());
     dmtx->apply(d_trans.get(), square_dmtx.get());
 
-    GKO_ASSERT_MTX_NEAR(square_dmtx, square_mtx, 1e-14);
     GKO_ASSERT_MTX_EQ_SPARSITY(square_dmtx, square_mtx);
+    GKO_ASSERT_MTX_NEAR(square_dmtx, square_mtx, 1e-14);
     ASSERT_TRUE(square_dmtx->is_sorted_by_column_index());
 }
 
