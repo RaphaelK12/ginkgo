@@ -534,7 +534,7 @@ TEST_F(Csr, SortUnsortedMatrixIsEquivalentToRef)
 }
 
 
-TEST_F(Csr, ExtractDiagonalIsquivalentToRef)
+TEST_F(Csr, ExtractDiagonalIsEquivalentToRef)
 {
     set_up_apply_data();
 
