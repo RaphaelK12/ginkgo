@@ -192,6 +192,17 @@ constexpr size_type byte_size = CHAR_BIT;
 
 
 /**
+ * Value for an invalid index.
+ */
+constexpr int invalid_index = static_cast<int>(-1);
+
+/**
+ * Value for an invalid unsigned int.
+ */
+constexpr unsigned int invalid_unsigned_int = static_cast<unsigned int>(-1);
+
+
+/**
  * This class is used to encode storage precisions of low precision algorithms.
  *
  * Some algorithms in Ginkgo can improve their performance by storing parts of
@@ -391,6 +402,7 @@ GKO_ATTRIBUTES constexpr bool operator!=(precision_reduction x,
  */
 #define GKO_ENABLE_FOR_ALL_EXECUTORS(_enable_macro) \
     _enable_macro(OmpExecutor, omp);                \
+    _enable_macro(MpiExecutor, mpi);                \
     _enable_macro(HipExecutor, hip);                \
     _enable_macro(CudaExecutor, cuda)
 
@@ -470,6 +482,43 @@ GKO_ATTRIBUTES constexpr bool operator!=(precision_reduction x,
     template _macro(std::complex<float>, int64);              \
     template _macro(std::complex<double>, int64)
 
+
+/**
+ * Instantiates a template for each value and index type compiled by Ginkgo.
+ *
+ * @param _macro  A macro which expands the template instantiation
+ *                (not including the leading `template` specifier).
+ *                Should take two arguments, which are replaced by the
+ *                value and index types.
+ */
+#define GKO_INSTANTIATE_FOR_EACH_SEPARATE_VALUE_AND_INDEX_TYPE(_macro) \
+    template _macro(float);                                            \
+    template _macro(double);                                           \
+    template _macro(std::complex<float>);                              \
+    template _macro(std::complex<double>);                             \
+    template _macro(int32);                                            \
+    template _macro(int64);
+
+
+/**
+ * Instantiates a template for each value and index type compiled by Ginkgo.
+ *
+ * @param _macro  A macro which expands the template instantiation
+ *                (not including the leading `template` specifier).
+ *                Should take two arguments, which are replaced by the
+ *                value and index types.
+ */
+#define GKO_INSTANTIATE_FOR_EACH_COMBINED_VALUE_AND_INDEX_TYPE(_macro) \
+    template _macro(char, char);                                       \
+    template _macro(int32, int32);                                     \
+    template _macro(int64, int64);                                     \
+    template _macro(unsigned int, unsigned int);                       \
+    template _macro(unsigned long, unsigned long);                     \
+    template _macro(float, float);                                     \
+    template _macro(double, double);                                   \
+    template _macro(long double, long double);                         \
+    template _macro(std::complex<float>, std::complex<float>);         \
+    template _macro(std::complex<double>, std::complex<double>);
 
 /**
  * Instantiates a template for each value type conversion pair compiled by
