@@ -35,15 +35,18 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
 #include <algorithm>
+#include <functional>
 #include <iterator>
 #include <memory>
 #include <type_traits>
+#include <numeric>
 #include <utility>
 
 
 #include <ginkgo/core/base/exception.hpp>
 #include <ginkgo/core/base/exception_helpers.hpp>
 #include <ginkgo/core/base/executor.hpp>
+#include <ginkgo/core/base/index_set.hpp>
 #include <ginkgo/core/base/memory_space.hpp>
 #include <ginkgo/core/base/types.hpp>
 #include <ginkgo/core/base/utils.hpp>
@@ -446,11 +449,19 @@ public:
     }
 
     /**
+     * Distributes the array according to the given index set.
+     */
+    template <typename IndexType>
+    Array distribute_data(gko::Executor *exec,
+                          const IndexSet<IndexType> &index_set);
+
+
+    /**
      * Deallocates all data used by the Array.
      *
-     * The array is left in a valid, but empty state, so the same array can be
-     * used to allocate new memory. Calls to Array::get_data() will return
-     * a `nullptr`.
+     * The array is left in a valid, but empty state, so the same array can
+     * be used to allocate new memory. Calls to Array::get_data() will
+     * return a `nullptr`.
      */
     void clear() noexcept
     {

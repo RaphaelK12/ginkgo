@@ -68,4 +68,46 @@ GKO_INSTANTIATE_FOR_EACH_VALUE_CONVERSION(GKO_DECLARE_ARRAY_CONVERSION);
 
 
 }  // namespace detail
+
+template <typename ValueType>
+template <typename IndexType>
+Array<ValueType> Array<ValueType>::distribute_data(
+    gko::Executor *exec, const IndexSet<IndexType> &index_set)
+{
+    GKO_ASSERT_MPI_EXEC(exec);
+    auto sub_exec = exec->get_sub_executor();
+    auto mpi_exec = dynamic_cast<gko::MpiExecutor *>(exec);
+    auto num_ranks = mpi_exec->get_num_ranks();
+    auto my_rank = mpi_exec->get_my_rank();
+    auto root_rank = mpi_exec->get_root_rank();
+    auto comm = mpi_exec->get_communicator();
+
+    // int because MPI functions only support 32 bit integers.
+    auto num_elems = static_cast<int>(index_set.get_num_elements());
+    auto distributed_array = Array{sub_exec, index_set.get_num_elements()};
+    auto send_counts =
+        Array<int>{sub_exec->get_master(), static_cast<size_type>(num_ranks)};
+    mpi_exec->gather<int, int>(&num_elems, 1, send_counts.get_data(), 1,
+                               root_rank);
+    auto displacements = Array<int>{send_counts};
+    // IMPROVE-ME
+    std::partial_sum(displacements.get_data(),
+                     displacements.get_data() + displacements.get_num_elems(),
+                     displacements.get_data());
+    for (auto i = 0; i < displacements.get_num_elems(); ++i) {
+        displacements.get_data()[i] -= send_counts.get_data()[i];
+    }
+    mpi_exec->scatter<ValueType, ValueType>(
+        data_.get(), send_counts.get_data(), displacements.get_data(),
+        distributed_array.get_data(), num_elems, root_rank);
+
+    return std::move(distributed_array);
+}
+
+#define GKO_DECLARE_ARRAY_DISTRIBUTE(ValueType, IndexType) \
+    Array<ValueType> Array<ValueType>::distribute_data(    \
+        gko::Executor *exec, const IndexSet<IndexType> &index_set)
+
+GKO_INSTANTIATE_FOR_EACH_VALUE_AND_INDEX_TYPE(GKO_DECLARE_ARRAY_DISTRIBUTE);
+
 }  // namespace gko

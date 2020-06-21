@@ -649,6 +649,67 @@ public:
 };
 
 
+/**
+ * This mixin implements a static `distributed_create()` method on
+ * `ConcreteType` that dynamically allocates the memory, uses the passed-in
+ * arguments to construct the object, and returns an std::unique_ptr to such an
+ * object.
+ *
+ * @tparam ConcreteObject  the concrete type for which `create()` is being
+ *                         implemented [CRTP parameter]
+ */
+template <typename ConcreteType>
+class EnableDistributedCreateMethod {
+public:
+    template <typename ExecType, typename... Args>
+    static std::unique_ptr<ConcreteType> distributed_create(ExecType &exec,
+                                                            Args &&... args)
+    {
+        GKO_ASSERT_MPI_EXEC(exec.get());
+        return std::unique_ptr<ConcreteType>(new ConcreteType(
+            exec->get_sub_executor(), std::forward<Args>(args)...));
+    }
+
+
+    template <typename ExecType, typename... Args>
+    static std::unique_ptr<ConcreteType> distribute_data(ExecType &exec,
+                                                         Args &&... args)
+    {
+        return ConcreteType::distribute_data_impl(exec,
+                                                  std::forward<Args>(args)...);
+    }
+
+    template <typename ExecType, typename... Args>
+    static std::unique_ptr<ConcreteType> create_and_distribute(ExecType &exec,
+                                                               Args &&... args)
+    {
+        GKO_ASSERT_MPI_EXEC(exec.get());
+        return distribute_data(exec, args...);
+    }
+};
+
+
+/**
+ * This mixin implements a static `distribute_data()` method on
+ * `ConcreteType` that dynamically allocates the memory, uses the passed-in
+ * arguments to construct the object, and returns an std::unique_ptr to such an
+ * object.
+ *
+ * @tparam ConcreteObject  the concrete type for which `create()` is being
+ *                         implemented [CRTP parameter]
+ */
+template <typename ConcreteType>
+class EnableDistributeMethod {
+public:
+    template <typename ExecType, typename... Args>
+    static std::unique_ptr<ConcreteType> distribute_data(ExecType &exec,
+                                                         Args &&... args)
+    {
+        return ConcreteType::distribute_data_impl(exec,
+                                                  std::forward<Args>(args)...);
+    }
+};
+
 }  // namespace gko
 
 
