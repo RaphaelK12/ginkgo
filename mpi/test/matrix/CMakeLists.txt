@@ -1,0 +1,1 @@
+ginkgo_create_mpi_test(distributed_dense 2)

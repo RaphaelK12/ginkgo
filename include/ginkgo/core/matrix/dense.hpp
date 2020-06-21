@@ -36,9 +36,9 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <initializer_list>
 
-
 #include <ginkgo/core/base/array.hpp>
 #include <ginkgo/core/base/executor.hpp>
+#include <ginkgo/core/base/index_set.hpp>
 #include <ginkgo/core/base/lin_op.hpp>
 #include <ginkgo/core/base/mtx_io.hpp>
 #include <ginkgo/core/base/range_accessors.hpp>
@@ -90,6 +90,8 @@ class SparsityCsr;
 template <typename ValueType = default_precision>
 class Dense : public EnableLinOp<Dense<ValueType>>,
               public EnableCreateMethod<Dense<ValueType>>,
+              public EnableDistributeMethod<Dense<ValueType>>,
+              public EnableDistributedCreateMethod<Dense<ValueType>>,
               public ConvertibleTo<Dense<next_precision<ValueType>>>,
               public ConvertibleTo<Coo<ValueType, int32>>,
               public ConvertibleTo<Coo<ValueType, int64>>,
@@ -112,6 +114,8 @@ class Dense : public EnableLinOp<Dense<ValueType>>,
               public Permutable<int32>,
               public Permutable<int64> {
     friend class EnableCreateMethod<Dense>;
+    friend class EnableDistributeMethod<Dense>;
+    friend class EnableDistributedCreateMethod<Dense>;
     friend class EnablePolymorphicObject<Dense, LinOp>;
     friend class Coo<ValueType, int32>;
     friend class Coo<ValueType, int64>;
@@ -498,6 +502,42 @@ protected:
                              this->get_stride());
     }
 
+
+    template <typename ExecType, typename IndexSetType, typename ValuesArray>
+    static std::unique_ptr<Dense> distribute_data_impl(ExecType &exec,
+                                                       IndexSetType &index_set,
+                                                       dim<2> &size,
+                                                       ValuesArray &&values,
+                                                       size_type stride)
+    {
+        auto updated_exec = exec->get_sub_executor();
+        auto updated_stride = stride;
+        auto updated_size = size;
+        auto updated_values = values.distribute_data(lend(exec), index_set);
+        return Dense::create(updated_exec, updated_size, updated_values,
+                             updated_stride);
+    }
+
+
+    template <typename ExecType>
+    static std::unique_ptr<Dense> distribute_data_impl(ExecType &exec,
+                                                       const dim<2> &size,
+                                                       size_type stride)
+    {
+        auto updated_exec = exec->get_sub_executor();
+        return Dense::create(updated_exec, size, stride);
+    }
+
+
+    template <typename ExecType>
+    static std::unique_ptr<Dense> distribute_data_impl(ExecType &exec,
+                                                       const dim<2> &size)
+    {
+        auto updated_exec = exec->get_sub_executor();
+        return Dense::create(updated_exec, size, size[1]);
+    }
+
+
     /**
      * @copydoc scale(const LinOp *)
      *
@@ -697,6 +737,40 @@ std::unique_ptr<Matrix> initialize(
  */
 template <typename Matrix, typename... TArgs>
 std::unique_ptr<Matrix> initialize(
+    std::initializer_list<std::initializer_list<typename Matrix::value_type>>
+        vals,
+    std::shared_ptr<const Executor> exec, TArgs &&... create_args)
+{
+    return initialize<Matrix>(vals.size() > 0 ? begin(vals)->size() : 0, vals,
+                              std::move(exec),
+                              std::forward<TArgs>(create_args)...);
+}
+
+
+/**
+ * Creates and initializes a distributed matrix.
+ *
+ * This function first creates a temporary Dense matrix, fills it with passed in
+ * values, and then converts the matrix to the requested type. The stride of
+ * the intermediate Dense matrix is set to the number of columns of the
+ * initializer list.
+ *
+ * @tparam Matrix  matrix type to initialize
+ *                 (Dense has to implement the ConvertibleTo<Matrix> interface)
+ * @tparam TArgs  argument types for Matrix::create method
+ *                (not including the implied Executor as the first argument)
+ *
+ * @param vals  values used to initialize the matrix
+ * @param exec  Executor associated to the matrix
+ * @param create_args  additional arguments passed to Matrix::create, not
+ *                     including the Executor, which is passed as the first
+ *                     argument
+ *
+ * @ingroup LinOp
+ * @ingroup mat_formats
+ */
+template <typename Matrix, typename... TArgs>
+std::unique_ptr<Matrix> distributed_initialize(
     std::initializer_list<std::initializer_list<typename Matrix::value_type>>
         vals,
     std::shared_ptr<const Executor> exec, TArgs &&... create_args)
