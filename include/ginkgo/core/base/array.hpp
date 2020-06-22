@@ -452,7 +452,7 @@ public:
      * Distributes the array according to the given index set.
      */
     template <typename IndexType>
-    Array distribute_data(gko::Executor *exec,
+    Array distribute_data(std::shared_ptr<gko::Executor> exec,
                           const IndexSet<IndexType> &index_set);
 
 

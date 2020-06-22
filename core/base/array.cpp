@@ -72,11 +72,11 @@ GKO_INSTANTIATE_FOR_EACH_VALUE_CONVERSION(GKO_DECLARE_ARRAY_CONVERSION);
 template <typename ValueType>
 template <typename IndexType>
 Array<ValueType> Array<ValueType>::distribute_data(
-    gko::Executor *exec, const IndexSet<IndexType> &index_set)
+    std::shared_ptr<gko::Executor> exec, const IndexSet<IndexType> &index_set)
 {
-    GKO_ASSERT_MPI_EXEC(exec);
+    GKO_ASSERT_MPI_EXEC(exec.get());
     auto sub_exec = exec->get_sub_executor();
-    auto mpi_exec = dynamic_cast<gko::MpiExecutor *>(exec);
+    auto mpi_exec = dynamic_cast<gko::MpiExecutor *>(exec.get());
     auto num_ranks = mpi_exec->get_num_ranks();
     auto my_rank = mpi_exec->get_my_rank();
     auto root_rank = mpi_exec->get_root_rank();
@@ -84,7 +84,7 @@ Array<ValueType> Array<ValueType>::distribute_data(
 
     // int because MPI functions only support 32 bit integers.
     auto num_elems = static_cast<int>(index_set.get_num_elements());
-    auto distributed_array = Array{sub_exec, index_set.get_num_elements()};
+    auto distributed_array = Array{exec, index_set.get_num_elements()};
     auto send_counts =
         Array<int>{sub_exec->get_master(), static_cast<size_type>(num_ranks)};
     mpi_exec->gather<int, int>(&num_elems, 1, send_counts.get_data(), 1,
@@ -106,7 +106,8 @@ Array<ValueType> Array<ValueType>::distribute_data(
 
 #define GKO_DECLARE_ARRAY_DISTRIBUTE(ValueType, IndexType) \
     Array<ValueType> Array<ValueType>::distribute_data(    \
-        gko::Executor *exec, const IndexSet<IndexType> &index_set)
+        std::shared_ptr<gko::Executor> exec,               \
+        const IndexSet<IndexType> &index_set)
 
 GKO_INSTANTIATE_FOR_EACH_VALUE_AND_INDEX_TYPE(GKO_DECLARE_ARRAY_DISTRIBUTE);
 

@@ -511,7 +511,7 @@ protected:
         auto updated_exec = exec;
         auto updated_stride = stride;
         auto updated_size = size;
-        auto updated_values = values.distribute_data(lend(exec), index_set);
+        auto updated_values = values.distribute_data(exec, index_set);
         return Dense::create(updated_exec, updated_size, updated_values,
                              updated_stride);
     }
