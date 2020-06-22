@@ -204,6 +204,18 @@ TEST(AssertEqual, ThrowsWhenNotEqual)
 }
 
 
+TEST(AssertCondition, DoesNotThrowWhenConditionIsSatisfied)
+{
+    ASSERT_NO_THROW(GKO_ASSERT_CONDITION(1 == 1));
+}
+
+
+TEST(AssertCondition, ThrowsWhenConditionIsUnSatisfied)
+{
+    ASSERT_THROW(GKO_ASSERT_CONDITION(1 == 2), gko::ConditionUnsatisfied);
+}
+
+
 TEST(AssertEqualRows, DoesNotThrowWhenEqualRowSize)
 {
     ASSERT_NO_THROW(

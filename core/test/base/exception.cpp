@@ -132,6 +132,27 @@ TEST(ExceptionClasses, DimensionMismatchReturnsCorrectWhatMessage)
 }
 
 
+TEST(ExceptionClasses, ValueMismatchReturnsCorrectWhatMessage)
+{
+    gko::ValueMismatch error("test_file.cpp", 24, "test_func", 3, 4,
+                             "my_clarify");
+    ASSERT_EQ(std::string("test_file.cpp:24: test_func: Value mismatch "
+                          ": 3 and 4 : my_clarify"),
+              error.what());
+}
+
+
+TEST(ExceptionClasses, ConditionUnsatisfiedReturnsCorrectWhatMessage)
+{
+    gko::ConditionUnsatisfied error("test_file.cpp", 24, "test_func", "2==3",
+                                    "my_clarify");
+    ASSERT_EQ(
+        std::string("test_file.cpp:24: test_func: Condition not satisfied "
+                    ": 2==3 : my_clarify"),
+        error.what());
+}
+
+
 TEST(ExceptionClasses, AllocationErrorReturnsCorrectWhatMessage)
 {
     gko::AllocationError error("test_file.cpp", 42, "OMP", 135);
