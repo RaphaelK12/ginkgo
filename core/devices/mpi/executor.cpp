@@ -69,13 +69,13 @@ std::shared_ptr<const Executor> MpiExecutor::get_sub_executor() const noexcept
 
 std::shared_ptr<MemorySpace> MpiExecutor::get_mem_space() noexcept
 {
-    return this->mem_space_instance_;
+    return this->sub_executor_->get_mem_space();
 }
 
 
 std::shared_ptr<const MemorySpace> MpiExecutor::get_mem_space() const noexcept
 {
-    return this->mem_space_instance_;
+    return this->sub_executor_->get_mem_space();
 }
 
 

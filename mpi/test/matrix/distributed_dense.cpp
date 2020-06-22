@@ -55,17 +55,22 @@ template <typename T>
 class DistributedDense : public ::testing::Test {
 protected:
     using value_type = T;
+    using Mtx = gko::matrix::Dense<value_type>;
     DistributedDense() : mpi_exec(nullptr) {}
 
     void SetUp()
     {
         char **argv;
         int argc = 0;
-        exec = gko::ReferenceExecutor::create();
+        exec = gko::OmpExecutor::create();
         mpi_exec = gko::MpiExecutor::create({"omp"});
         sub_exec = mpi_exec->get_sub_executor();
         rank = mpi_exec->get_my_rank();
         ASSERT_GT(mpi_exec->get_num_ranks(), 1);
+        mtx1 = gko::initialize<Mtx>({I<T>({1.0, -1.0}), I<T>({-2.0, 2.0})},
+                                    sub_exec);
+        mtx2 =
+            gko::initialize<Mtx>({{1.0, 2.0, 3.0}, {0.5, 1.5, 2.5}}, sub_exec);
     }
 
     void TearDown()
@@ -74,20 +79,6 @@ protected:
             // ensure that previous calls finished and didn't throw an error
             ASSERT_NO_THROW(mpi_exec->synchronize());
         }
-    }
-
-
-    static void assert_equal_to_original_mtx(gko::matrix::Dense<value_type> *m)
-    {
-        ASSERT_EQ(m->get_size(), gko::dim<2>(2, 3));
-        ASSERT_EQ(m->get_stride(), 4);
-        ASSERT_EQ(m->get_num_stored_elements(), 2 * 4);
-        EXPECT_EQ(m->at(0, 0), value_type{1.0});
-        EXPECT_EQ(m->at(0, 1), value_type{2.0});
-        EXPECT_EQ(m->at(0, 2), value_type{3.0});
-        EXPECT_EQ(m->at(1, 0), value_type{1.5});
-        EXPECT_EQ(m->at(1, 1), value_type{2.5});
-        ASSERT_EQ(m->at(1, 2), value_type{3.5});
     }
 
     static void assert_empty(gko::matrix::Dense<value_type> *m)
@@ -111,8 +102,9 @@ protected:
     std::shared_ptr<gko::MpiExecutor> mpi_exec;
     std::shared_ptr<const gko::Executor> exec;
     std::shared_ptr<const gko::Executor> sub_exec;
+    std::unique_ptr<Mtx> mtx1;
+    std::unique_ptr<Mtx> mtx2;
     int rank;
-    // std::unique_ptr<gko::matrix::Dense<value_type>> mtx;
 };
 
 TYPED_TEST_CASE(DistributedDense, gko::test::ValueTypes);
@@ -231,9 +223,9 @@ TYPED_TEST(DistributedDense, CanDistributeData)
         index_set.add_subset(0, 8);
     } else {
         // clang-format off
-        comp_data = new value_type[12]{3.0,  4.0, -1.0, 3.0,
-                                       3.0,  4.0, -1.0, 3.0,
-                                       5.0,  6.0, -1.0, 4.0};
+        comp_data = new value_type[12]{3.0, 4.0, -1.0, 3.0,
+                                       3.0, 4.0, -1.0, 3.0,
+                                       5.0, 6.0, -1.0, 4.0};
         // clang-format on
         index_set.add_subset(8, 20);
         local_size = gko::dim<2>(3, 4);
@@ -245,6 +237,7 @@ TYPED_TEST(DistributedDense, CanDistributeData)
         this->mpi_exec, index_set, local_size,
         gko::Array<value_type>::view(this->sub_exec, 20, data), 4);
 
+    ASSERT_EQ(m->get_executor(), this->mpi_exec);
     this->assert_equal_mtxs(m.get(), lm.get());
     if (this->rank == 0) {
         delete data;
@@ -253,168 +246,56 @@ TYPED_TEST(DistributedDense, CanDistributeData)
 }
 
 
-TYPED_TEST(DistributedDense, CanBeListConstructed)
+TYPED_TEST(DistributedDense, AppliesToDense)
 {
     using value_type = typename TestFixture::value_type;
-    auto m = gko::initialize<gko::matrix::Dense<TypeParam>>({1.0, 2.0},
-                                                            this->sub_exec);
-
-    ASSERT_EQ(m->get_size(), gko::dim<2>(2, 1));
-    ASSERT_EQ(m->get_num_stored_elements(), 2);
-    EXPECT_EQ(m->at(0), value_type{1});
-    EXPECT_EQ(m->at(1), value_type{2});
+    gko::IndexSet<gko::int32> index_set{10};
+    gko::dim<2> local_size{};
+    gko::dim<2> res_size{};
+    std::shared_ptr<gko::matrix::Dense<value_type>> comp_res;
+    value_type *data;
+    value_type *comp_data;
+    if (this->rank == 0) {
+        // clang-format off
+        data = new value_type[10]{ 1.0, 2.0,
+                                  -1.0, 2.0,
+                                   3.0, 4.0,
+                                  -1.0, 3.0,
+                                   3.0, 4.0};
+        comp_data = new value_type[4]{ -3.0, 3.0,
+                                        -5.0, 5.0};
+        // clang-format on
+        index_set.add_subset(0, 4);
+        local_size = gko::dim<2>(2, 2);
+        res_size = gko::dim<2>(2, 2);
+        comp_res = gko::matrix::Dense<value_type>::create(
+            this->mpi_exec->get_sub_executor(), res_size,
+            gko::Array<value_type>::view(this->sub_exec, 4, comp_data), 2);
+    } else {
+        // clang-format off
+        comp_data = new value_type[6]{-5.0, 5.0,
+                                      -7.0, 7.0,
+                                      -5.0, 5.0};
+        // clang-format on
+        index_set.add_subset(4, 10);
+        local_size = gko::dim<2>(3, 2);
+        res_size = gko::dim<2>(3, 2);
+        comp_res = gko::matrix::Dense<value_type>::create(
+            this->mpi_exec->get_sub_executor(), res_size,
+            gko::Array<value_type>::view(this->sub_exec, 6, comp_data), 2);
+    }
+    auto mat = gko::matrix::Dense<value_type>::create_and_distribute(
+        this->mpi_exec, index_set, local_size,
+        gko::Array<value_type>::view(this->sub_exec, 10, data), 2);
+    auto res = gko::matrix::Dense<value_type>::create(
+        this->mpi_exec->get_sub_executor(), res_size);
+    mat->apply(this->mtx1.get(), res.get());
+    this->assert_equal_mtxs(res.get(), comp_res.get());
+    if (this->rank == 0) {
+        delete data;
+    }
+    delete comp_data;
 }
-
-
-// TYPED_TEST(DistributedDense, CanBeListConstructedWithstride)
-// {
-//     using value_type = typename TestFixture::value_type;
-//     auto m = gko::initialize<gko::matrix::Dense<TypeParam>>(2,
-//     {1.0, 2.0},
-//                                                             this->exec);
-//     ASSERT_EQ(m->get_size(), gko::dim<2>(2, 1));
-//     ASSERT_EQ(m->get_num_stored_elements(), 4);
-//     EXPECT_EQ(m->at(0), value_type{1.0});
-//     EXPECT_EQ(m->at(1), value_type{2.0});
-// }
-
-
-// TYPED_TEST(DistributedDense, CanBeDoubleListConstructed)
-// {
-//     using value_type = typename TestFixture::value_type;
-//     using T = value_type;
-//     auto m = gko::initialize<gko::matrix::Dense<TypeParam>>(
-//         {I<T>{1.0, 2.0}, I<T>{3.0, 4.0}, I<T>{5.0, 6.0}}, this->exec);
-
-//     ASSERT_EQ(m->get_size(), gko::dim<2>(3, 2));
-//     ASSERT_EQ(m->get_num_stored_elements(), 6);
-//     EXPECT_EQ(m->at(0), value_type{1.0});
-//     EXPECT_EQ(m->at(1), value_type{2.0});
-//     EXPECT_EQ(m->at(2), value_type{3.0});
-//     ASSERT_EQ(m->at(3), value_type{4.0});
-//     EXPECT_EQ(m->at(4), value_type{5.0});
-// }
-
-
-// TYPED_TEST(DistributedDense, CanBeDoubleListConstructedWithstride)
-// {
-//     using value_type = typename TestFixture::value_type;
-//     using T = value_type;
-//     auto m = gko::initialize<gko::matrix::Dense<TypeParam>>(
-//         4, {I<T>{1.0, 2.0}, I<T>{3.0, 4.0}, I<T>{5.0, 6.0}}, this->exec);
-
-//     ASSERT_EQ(m->get_size(), gko::dim<2>(3, 2));
-//     ASSERT_EQ(m->get_num_stored_elements(), 12);
-//     EXPECT_EQ(m->at(0), value_type{1.0});
-//     EXPECT_EQ(m->at(1), value_type{2.0});
-//     EXPECT_EQ(m->at(2), value_type{3.0});
-//     ASSERT_EQ(m->at(3), value_type{4.0});
-//     EXPECT_EQ(m->at(4), value_type{5.0});
-// }
-
-
-// TYPED_TEST(DistributedDense, CanBeCopied)
-// {
-//     auto mtx_copy =
-//         gko::matrix::Dense<TypeParam>::distributed_create(this->mpi_exec);
-//     mtx_copy->copy_from(this->mtx.get());
-//     this->assert_equal_to_original_mtx(this->mtx.get());
-//     this->mtx->at(0) = 7;
-//     this->assert_equal_to_original_mtx(mtx_copy.get());
-// }
-
-
-// TYPED_TEST(DistributedDense, CanBeMoved)
-// {
-//     auto mtx_copy =
-//         gko::matrix::Dense<TypeParam>::distributed_create(this->mpi_exec);
-//     mtx_copy->copy_from(std::move(this->mtx));
-//     this->assert_equal_to_original_mtx(mtx_copy.get());
-// }
-
-
-// TYPED_TEST(DistributedDense, CanBeCloned)
-// {
-//     auto mtx_clone = this->mtx->clone();
-//     this->assert_equal_to_original_mtx(
-//         dynamic_cast<decltype(this->mtx.get())>(mtx_clone.get()));
-// }
-
-
-// TYPED_TEST(DistributedDense, CanBeCleared)
-// {
-//     this->mtx->clear();
-//     this->assert_empty(this->mtx.get());
-// }
-
-
-// TYPED_TEST(DistributedDense, CanBeReadFromMatrixData)
-// {
-//     using value_type = typename TestFixture::value_type;
-//     auto m =
-//     gko::matrix::Dense<TypeParam>::distributed_create(this->mpi_exec);
-//     m->read(gko::matrix_data<TypeParam>{{2, 3},
-//                                         {{0, 0, 1.0},
-//                                          {0, 1, 3.0},
-//                                          {0, 2, 2.0},
-//                                          {1, 0, 0.0},
-//                                          {1, 1, 5.0},
-//                                          {1, 2, 0.0}}});
-
-//     ASSERT_EQ(m->get_size(), gko::dim<2>(2, 3));
-//     ASSERT_EQ(m->get_num_stored_elements(), 6);
-//     EXPECT_EQ(m->at(0, 0), value_type{1.0});
-//     EXPECT_EQ(m->at(1, 0), value_type{0.0});
-//     EXPECT_EQ(m->at(0, 1), value_type{3.0});
-//     EXPECT_EQ(m->at(1, 1), value_type{5.0});
-//     EXPECT_EQ(m->at(0, 2), value_type{2.0});
-//     ASSERT_EQ(m->at(1, 2), value_type{0.0});
-// }
-
-
-// TYPED_TEST(DistributedDense, GeneratesCorrectMatrixData)
-// {
-//     using value_type = typename TestFixture::value_type;
-//     using tpl = typename gko::matrix_data<TypeParam>::nonzero_type;
-//     gko::matrix_data<TypeParam> data;
-
-//     this->mtx->write(data);
-
-//     ASSERT_EQ(data.size, gko::dim<2>(2, 3));
-//     ASSERT_EQ(data.nonzeros.size(), 6);
-//     EXPECT_EQ(data.nonzeros[0], tpl(0, 0, value_type{1.0}));
-//     EXPECT_EQ(data.nonzeros[1], tpl(0, 1, value_type{2.0}));
-//     EXPECT_EQ(data.nonzeros[2], tpl(0, 2, value_type{3.0}));
-//     EXPECT_EQ(data.nonzeros[3], tpl(1, 0, value_type{1.5}));
-//     EXPECT_EQ(data.nonzeros[4], tpl(1, 1, value_type{2.5}));
-//     EXPECT_EQ(data.nonzeros[5], tpl(1, 2, value_type{3.5}));
-// }
-
-
-// TYPED_TEST(DistributedDense, CanCreateSubmatrix)
-// {
-//     using value_type = typename TestFixture::value_type;
-//     auto submtx = this->mtx->create_submatrix(gko::span{0, 1},
-//     gko::span{1, 2});
-
-//     EXPECT_EQ(submtx->at(0, 0), value_type{2.0});
-//     EXPECT_EQ(submtx->at(0, 1), value_type{3.0});
-//     EXPECT_EQ(submtx->at(1, 0), value_type{2.5});
-//     EXPECT_EQ(submtx->at(1, 1), value_type{3.5});
-// }
-
-
-// TYPED_TEST(DistributedDense, CanCreateSubmatrixWithStride)
-// {
-//     using value_type = typename TestFixture::value_type;
-//     auto submtx =
-//         this->mtx->create_submatrix(gko::span{0, 1}, gko::span{1, 2}, 3);
-
-//     EXPECT_EQ(submtx->at(0, 0), value_type{2.0});
-//     EXPECT_EQ(submtx->at(0, 1), value_type{3.0});
-//     EXPECT_EQ(submtx->at(1, 0), value_type{1.5});
-//     EXPECT_EQ(submtx->at(1, 1), value_type{2.5});
-// }
 
 
 }  // namespace

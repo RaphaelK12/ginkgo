@@ -510,7 +510,7 @@ protected:
                                                        ValuesArray &&values,
                                                        size_type stride)
     {
-        auto updated_exec = exec->get_sub_executor();
+        auto updated_exec = exec;
         auto updated_stride = stride;
         auto updated_size = size;
         auto updated_values = values.distribute_data(lend(exec), index_set);
@@ -524,7 +524,7 @@ protected:
                                                        const dim<2> &size,
                                                        size_type stride)
     {
-        auto updated_exec = exec->get_sub_executor();
+        auto updated_exec = exec;
         return Dense::create(updated_exec, size, stride);
     }
 
@@ -533,7 +533,7 @@ protected:
     static std::unique_ptr<Dense> distribute_data_impl(ExecType &exec,
                                                        const dim<2> &size)
     {
-        auto updated_exec = exec->get_sub_executor();
+        auto updated_exec = exec;
         return Dense::create(updated_exec, size, size[1]);
     }
 
