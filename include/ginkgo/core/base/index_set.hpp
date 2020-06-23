@@ -75,7 +75,13 @@ public:
     /**
      * Copy constructor.
      */
-    IndexSet(const IndexSet &) = default;
+    IndexSet(const IndexSet &other)
+        : is_merged_(), largest_subset_(), index_space_size_(), merge_mutex_()
+    {
+        is_merged_ = other.is_merged_;
+        largest_subset_ = other.largest_subset_;
+        index_space_size_ = other.index_space_size_;
+    }
 
     /**
      * Copy assignment operator.
@@ -100,7 +106,7 @@ public:
      * of.
      *
      * Note that the result is not equal to the number of indices within this
-     * set. The latter information is returned by get_num_elements().
+     * set. The latter information is returned by get_num_elems().
      */
     size_type get_size() const { return index_space_size_; }
 
@@ -112,7 +118,7 @@ public:
      */
     void set_size(const size_type input_size)
     {
-        GKO_ASSERT(subsets_.empty());
+        GKO_ASSERT_CONDITION(subsets_.empty());
         index_space_size_ = input_size;
         is_merged_ = true;
     }
@@ -136,7 +142,6 @@ public:
      */
     void add_index(const size_type index);
 
-
     /**
      * Add the given IndexSet @p other to the current one, constructing the
      * union of *this and @p other.
@@ -152,7 +157,7 @@ public:
      * indices of the @p other index set lie outside the subset
      * <code>[0,size())</code> represented by the current object.
      */
-    void add_indices(const IndexSet &other, const size_type offset);
+    void add_indices(const IndexSet &other, const size_type offset = 0);
 
     /**
      * Add a whole set of indices described by dereferencing every element of
@@ -162,6 +167,7 @@ public:
      * added
      * @param[in] end The past-the-end iterator for the subset of elements to be
      * added. @pre The condition <code>begin@<=end</code> needs to be satisfied.
+     * FIXME: Undefined reference error
      */
     template <typename ForwardIterator>
     void add_indices(const ForwardIterator &begin, const ForwardIterator &end);
@@ -179,7 +185,7 @@ public:
 
     /**
      * Return whether the index set stored by this object contains no elements.
-     * This is similar, but faster than checking <code>get_num_elements() ==
+     * This is similar, but faster than checking <code>get_num_elems() ==
      * 0</code>.
      */
     bool is_empty() const { return subsets_.empty(); }
@@ -199,12 +205,12 @@ public:
     /**
      * Return the number of elements stored in this index set.
      */
-    size_type get_num_elements() const;
+    size_type get_num_elems() const;
 
     /**
      * Return the global index of the local index with number @p local_index
      * stored in this index set. @p local_index obviously needs to be less than
-     * get_num_elements().
+     * get_num_elems().
      */
     size_type get_global_index(const size_type local_index) const;
 
@@ -225,7 +231,7 @@ public:
      * This function returns the minimal number of such intervals that are
      * needed to represent the index set under consideration.
      */
-    unsigned int get_num_subsets() const;
+    size_type get_num_subsets() const;
 
     /**
      * This function returns the local index of the beginning of the largest
@@ -238,7 +244,7 @@ public:
      *
      * This call assumes that the IndexSet is nonempty.
      */
-    size_type largest_subset_starting_index() const;
+    size_type get_largest_subset_starting_index() const;
 
     /**
      * Comparison for equality of index sets. This operation is only allowed if
@@ -323,7 +329,7 @@ public:
         /**
          * Number of elements in this interval.
          */
-        size_type get_num_elements() const
+        size_type get_num_elems() const
         {
             return index_set_->subsets_[subset_idx_].end_ -
                    index_set_->subsets_[subset_idx_].begin_;
@@ -335,7 +341,7 @@ public:
         bool is_valid() const
         {
             return index_set_ != nullptr &&
-                   subset_idx_ < index_set_->get_num_elements();
+                   subset_idx_ < index_set_->get_num_elems();
         }
 
         /**
@@ -343,7 +349,7 @@ public:
          */
         ElementIterator begin() const
         {
-            GKO_ASSERT(is_valid());
+            GKO_ASSERT_CONDITION(is_valid());
             return {index_set_, subset_idx_,
                     index_set_->subsets_[subset_idx_].begin_};
         }
@@ -354,7 +360,7 @@ public:
          */
         ElementIterator end() const
         {
-            GKO_ASSERT(is_valid());
+            GKO_ASSERT_CONDITION(is_valid());
             if (subset_idx_ < index_set_->subsets_.size() - 1)
                 return {index_set_, subset_idx_ + 1,
                         index_set_->subsets_[subset_idx_ + 1].begin_};
@@ -367,7 +373,7 @@ public:
          */
         size_type last() const
         {
-            GKO_ASSERT(is_valid());
+            GKO_ASSERT_CONDITION(is_valid());
             return index_set_->subsets_[subset_idx_].end_ - 1;
         }
 
@@ -386,7 +392,7 @@ public:
         {
             index_set_ = other.index_set_;
             subset_idx_ = other.subset_idx_;
-            GKO_ASSERT(subset_idx_ == invalid_index || is_valid());
+            GKO_ASSERT_CONDITION(subset_idx_ == invalid_index || is_valid());
             return *this;
         }
 
@@ -395,7 +401,7 @@ public:
          */
         bool operator==(const IntervalAccessor &other) const
         {
-            GKO_ASSERT(index_set_ == other.index_set_);
+            GKO_ASSERT_CONDITION(index_set_ == other.index_set_);
             return subset_idx_ == other.subset_idx_;
         }
 
@@ -404,7 +410,7 @@ public:
          */
         bool operator<(const IntervalAccessor &other) const
         {
-            GKO_ASSERT(index_set_ == other.index_set_);
+            GKO_ASSERT_CONDITION(index_set_ == other.index_set_);
             return subset_idx_ < other.subset_idx_;
         }
 
@@ -414,7 +420,7 @@ public:
          */
         void advance()
         {
-            GKO_ASSERT(is_valid());
+            GKO_ASSERT_CONDITION(is_valid());
             ++subset_idx_;
 
             // set ourselves to invalid if we walk off the end
@@ -533,7 +539,8 @@ public:
          */
         int operator-(const IntervalIterator &other) const
         {
-            GKO_ASSERT(accessor_.index_set_ == other.accessor_.index_set_);
+            GKO_ASSERT_CONDITION(accessor_.index_set_ ==
+                                 other.accessor_.index_set_);
 
             const size_type lhs = (accessor_.subset_idx_ == invalid_index)
                                       ? accessor_.index_set_->subsets_.size()
@@ -580,9 +587,10 @@ public:
                         const size_type index)
             : index_set_(indexset), subset_index_(subset_index), index_(index)
         {
-            GKO_ASSERT(subset_index_ < index_set_->subsets_.size());
-            GKO_ASSERT(index_ >= index_set_->subsets_[subset_index_].begin_ &&
-                       index_ < index_set->subsets_[subset_index_].end_);
+            GKO_ASSERT_CONDITION(subset_index_ < index_set_->subsets_.size());
+            GKO_ASSERT_CONDITION(
+                index_ >= index_set_->subsets_[subset_index_].begin_ &&
+                index_ < index_set_->subsets_[subset_index_].end_);
         }
 
         /**
@@ -599,7 +607,7 @@ public:
          */
         bool is_valid() const
         {
-            GKO_ASSERT(
+            GKO_ASSERT_CONDITION(
                 (subset_index_ == invalid_index && index_ == invalid_index) ||
                 (subset_index_ < index_set_->subsets_.size() &&
                  index_ < index_set_->subsets_[subset_index_].end_));
@@ -614,7 +622,7 @@ public:
          */
         size_type operator*() const
         {
-            GKO_ASSERT(is_valid());
+            GKO_ASSERT_CONDITION(is_valid());
             return index_;
         }
 
@@ -642,7 +650,7 @@ public:
          */
         bool operator==(const ElementIterator &other) const
         {
-            GKO_ASSERT(index_set_ == other.index_set_);
+            GKO_ASSERT_CONDITION(index_set_ == other.index_set_);
             return subset_index_ == other.subset_index_ &&
                    index_ == other.index_;
         }
@@ -660,7 +668,7 @@ public:
          */
         bool operator<(const ElementIterator &other) const
         {
-            GKO_ASSERT(index_set_ == other.index_set_);
+            GKO_ASSERT_CONDITION(index_set_ == other.index_set_);
             return subset_index_ < other.subset_index_ ||
                    (subset_index_ == other.subset_index_ &&
                     index_ < other.index_);
@@ -676,12 +684,12 @@ public:
          */
         std::ptrdiff_t operator-(const ElementIterator &other) const
         {
-            GKO_ASSERT(index_set_ == other.index_set_);
+            GKO_ASSERT_CONDITION(index_set_ == other.index_set_);
             if (*this == other) return 0;
             if (!(*this < other)) return -(other - *this);
 
             // only other can be equal to end() because of the checks above.
-            GKO_ASSERT(is_valid());
+            GKO_ASSERT_CONDITION(is_valid());
 
             // Note: we now compute how far advance *this in "*this < other" to
             // get other, so we need to return -c at the end.
@@ -699,8 +707,9 @@ public:
                 c += index_set_->subsets_[subset].end_ -
                      index_set_->subsets_[subset].begin_;
 
-            GKO_ASSERT(other.subset_index_ < index_set_->subsets_.size() ||
-                       other.subset_index_ == invalid_index);
+            GKO_ASSERT_CONDITION(other.subset_index_ <
+                                     index_set_->subsets_.size() ||
+                                 other.subset_index_ == invalid_index);
 
             // We might have walked too far because we went until the end of
             // other.subset_index, so walk backwards to other.index:
@@ -728,7 +737,7 @@ public:
          */
         void advance()
         {
-            GKO_ASSERT(is_valid());
+            GKO_ASSERT_CONDITION(is_valid());
             if (index_ < index_set_->subsets_[subset_index_].end_) ++index_;
             // end of this subset?
             if (index_ == index_set_->subsets_[subset_index_].end_) {
@@ -845,7 +854,7 @@ private:
     mutable bool is_merged_;
     mutable std::vector<subset> subsets_;
     mutable size_type largest_subset_;
-    std::mutex merge_mutex_;
+    mutable std::mutex merge_mutex_;
     size_type index_space_size_;
 };
 

@@ -69,11 +69,12 @@ void IndexSet<IndexType>::merge() const
 template <typename IndexType>
 void IndexSet<IndexType>::add_subset(const size_type begin, const size_type end)
 {
-    GKO_ASSERT((begin < index_space_size_) ||
-               ((begin == index_space_size_) && (end == index_space_size_)));
-    GKO_ASSERT(end <= index_space_size_);
+    GKO_ASSERT_CONDITION(
+        (begin < index_space_size_) ||
+        ((begin == index_space_size_) && (end == index_space_size_)));
+    GKO_ASSERT_CONDITION(end <= index_space_size_);
     // Should change to something similar to AssertIndexsubset
-    GKO_ASSERT(begin < end + 1);
+    GKO_ASSERT_CONDITION(begin < end + 1);
 
     if (begin != end) {
         const subset new_subset(begin, end);
@@ -95,7 +96,7 @@ template <typename IndexType>
 void IndexSet<IndexType>::add_index(const size_type index)
 {
     // Update to check AssertIndexsubset to check if index is within subset
-    GKO_ASSERT(index < index_space_size_);
+    GKO_ASSERT_CONDITION(index < index_space_size_);
 
     const subset new_subset(index, index + 1);
     if (subsets_.size() == 0 || index > subsets_.back().end_)
@@ -172,7 +173,8 @@ void IndexSet<IndexType>::add_indices(const IndexSet<IndexType> &other,
 
     if (other.subsets_.size() != 0) {
         // AssertIndexsubset(other.subsets_.back().end_ - 1, index_space_size);
-        GKO_ASSERT(other.subsets_.back().end_ - 1 < index_space_size_);
+        GKO_ASSERT_CONDITION(other.subsets_.back().end_ - 1 <
+                             index_space_size_);
     }
 
     merge();
@@ -218,7 +220,7 @@ bool IndexSet<IndexType>::is_element(const size_type index) const
         merge();
 
         // fast check whether the index is in the largest subset
-        GKO_ASSERT(largest_subset < subsets_.size());
+        GKO_ASSERT_CONDITION(largest_subset_ < subsets_.size());
         if (index >= subsets_[largest_subset_].begin_ &&
             index < subsets_[largest_subset_].end_)
             return true;
@@ -248,11 +250,11 @@ bool IndexSet<IndexType>::is_element(const size_type index) const
         if (p == subsets_.begin())
             return ((index >= p->begin_) && (index < p->end_));
 
-        GKO_ASSERT((p == subsets_.end()) || (p->begin_ > index));
+        GKO_ASSERT_CONDITION((p == subsets_.end()) || (p->begin_ > index));
 
         // now move to that previous subset
         --p;
-        GKO_ASSERT(p->begin_ <= index);
+        GKO_ASSERT_CONDITION(p->begin_ <= index);
 
         return (p->end_ > index);
     }
@@ -282,7 +284,7 @@ bool IndexSet<IndexType>::is_ascending_and_one_to_one(
 
 //     if (n_global_elements == 0) return true;
 
-// #ifdef DEAL_II_WITH_MPI
+// #ifdef MPI
 //     // Non-contiguous IndexSets can't be linear.
 //     const bool all_contiguous =
 //         (Utilities::MPI::min(is_contiguous() ? 1 : 0, communicator) == 1);
@@ -324,12 +326,12 @@ bool IndexSet<IndexType>::is_ascending_and_one_to_one(
 //     return (is_ascending == 1);
 // #else
 //     return true;
-// #endif  // DEAL_II_WITH_MPI
+// #endif  // MPI
 // }
 
 
 template <typename IndexType>
-size_type IndexSet<IndexType>::get_num_elements() const
+size_type IndexSet<IndexType>::get_num_elems() const
 {
     // make sure we have non-overlapping subsets_
     merge();
@@ -343,7 +345,7 @@ size_type IndexSet<IndexType>::get_num_elements() const
 #ifdef DEBUG
     size_type s = 0;
     for (const auto &subset : subsets_) s += (subset.end_ - subset.begin_);
-    GKO_ASSERT(s == v);
+    GKO_ASSERT_CONDITION(s == v);
 #endif
 
     return v;
@@ -354,13 +356,13 @@ template <typename IndexType>
 size_type IndexSet<IndexType>::get_global_index(
     const size_type local_index) const
 {
-    // AssertIndexsubset(n, get_num_elements());
-    GKO_ASSERT(local_index < this->get_num_elements());
+    // AssertIndexsubset(n, get_num_elems());
+    GKO_ASSERT_CONDITION(local_index < this->get_num_elems());
 
     merge();
 
     // first check whether the index is in the largest subset
-    GKO_ASSERT(largest_subset < subsets_.size());
+    GKO_ASSERT_CONDITION(largest_subset_ < subsets_.size());
     typename std::vector<subset>::const_iterator main_subset =
         subsets_.begin() + largest_subset_;
     if (local_index >= main_subset->superset_index_ &&
@@ -369,7 +371,7 @@ size_type IndexSet<IndexType>::get_global_index(
         return main_subset->begin_ +
                (local_index - main_subset->superset_index_);
 
-    // find out which chunk the local index local_indexbelongs to by using a
+    // find out which chunk the local index local_index belongs to by using a
     // binary search. the comparator is based on the end of the subsets_. Use
     // the position relative to main_subset to subdivide the subsets_
     subset r(local_index, local_index + 1);
@@ -386,7 +388,7 @@ size_type IndexSet<IndexType>::get_global_index(
     const typename std::vector<subset>::const_iterator p = std::lower_bound(
         subset_begin, subset_end, r, subset::superset_index_compare);
 
-    GKO_ASSERT(p != subsets_.end());
+    GKO_ASSERT_CONDITION(p != subsets_.end());
     return p->begin_ + (local_index - p->superset_index_);
 }
 
@@ -397,16 +399,16 @@ size_type IndexSet<IndexType>::get_local_index(
 {
     // to make this call thread-safe, merge() must not be called through
     // this function
-    GKO_ASSERT(is_merged_ == true);
+    GKO_ASSERT_CONDITION(is_merged_ == true);
     // AssertIndexsubset(n, size());
-    GKO_ASSERT(global_index < get_size());
+    GKO_ASSERT_CONDITION(global_index < get_size());
 
     // return immediately if the index set is empty
     if (is_empty()) return invalid_index;
 
     // check whether the index is in the largest subset. use the result to
     // perform a one-sided binary search afterward
-    GKO_ASSERT(largest_subset_ < subsets_.size());
+    GKO_ASSERT_CONDITION(largest_subset_ < subsets_.size());
     typename std::vector<subset>::const_iterator main_subset =
         subsets_.begin() + largest_subset_;
     if (global_index >= main_subset->begin_ && global_index < main_subset->end_)
@@ -426,19 +428,19 @@ size_type IndexSet<IndexType>::get_local_index(
     typename std::vector<subset>::const_iterator p =
         std::lower_bound(subset_begin, subset_end, r, subset::compare_end);
 
-    // if global_indexis not in this set
+    // if global_index is not in this set
     if (p == subset_end || p->end_ == global_index || p->begin_ > global_index)
         return invalid_index;
 
-    GKO_ASSERT(p != subsets_.end());
-    GKO_ASSERT(p->begin_ <= global_index);
-    GKO_ASSERT(global_index < p->end_);
+    GKO_ASSERT_CONDITION(p != subsets_.end());
+    GKO_ASSERT_CONDITION(p->begin_ <= global_index);
+    GKO_ASSERT_CONDITION(global_index < p->end_);
     return (global_index - p->begin_) + p->superset_index_;
 }
 
 
 template <typename IndexType>
-unsigned int IndexSet<IndexType>::get_num_subsets() const
+size_type IndexSet<IndexType>::get_num_subsets() const
 {
     merge();
     return subsets_.size();
@@ -446,9 +448,9 @@ unsigned int IndexSet<IndexType>::get_num_subsets() const
 
 
 template <typename IndexType>
-size_type IndexSet<IndexType>::largest_subset_starting_index() const
+size_type IndexSet<IndexType>::get_largest_subset_starting_index() const
 {
-    GKO_ASSERT(subsets_.empty() == false);
+    GKO_ASSERT_CONDITION(subsets_.empty() == false);
 
     merge();
     const typename std::vector<subset>::const_iterator main_subset =
@@ -461,8 +463,9 @@ size_type IndexSet<IndexType>::largest_subset_starting_index() const
 template <typename IndexType>
 bool IndexSet<IndexType>::operator==(const IndexSet<IndexType> &other) const
 {
-    GKO_ASSERT(get_size() == other.get_size());
-
+    GKO_ASSERT_CONDITION(get_size() == other.get_size());
+    // Are these merges expensive ? Can maybe affect performance if this index
+    // set equality is called a lot.
     merge();
     other.merge();
 
@@ -473,7 +476,7 @@ bool IndexSet<IndexType>::operator==(const IndexSet<IndexType> &other) const
 template <typename IndexType>
 bool IndexSet<IndexType>::operator!=(const IndexSet<IndexType> &other) const
 {
-    GKO_ASSERT(get_size() == other.get_size());
+    GKO_ASSERT_CONDITION(get_size() == other.get_size());
 
     merge();
     other.merge();
@@ -486,7 +489,7 @@ template <typename IndexType>
 IndexSet<IndexType> IndexSet<IndexType>::operator&(
     const IndexSet<IndexType> &other) const
 {
-    GKO_ASSERT(get_size() == other.get_size());
+    GKO_ASSERT_CONDITION(get_size() == other.get_size());
 
     merge();
     other.merge();
@@ -504,7 +507,7 @@ IndexSet<IndexType> IndexSet<IndexType>::operator&(
             ++r2;
         else {
             // the subsets_ must overlap somehow
-            GKO_ASSERT(
+            GKO_ASSERT_CONDITION(
                 ((r1->begin_ <= r2->begin_) && (r1->end_ > r2->begin_)) ||
                 ((r2->begin_ <= r1->begin_) && (r2->end_ > r1->begin_)));
 
@@ -597,7 +600,7 @@ void IndexSet<IndexType>::subtract_set(const IndexSet<IndexType> &other)
 template <typename IndexType>
 size_type IndexSet<IndexType>::pop_back()
 {
-    GKO_ASSERT(is_empty() == false);
+    GKO_ASSERT_CONDITION(is_empty() == false);
 
     const size_type index = subsets_.back().end_ - 1;
     --subsets_.back().end_;
@@ -611,7 +614,7 @@ size_type IndexSet<IndexType>::pop_back()
 template <typename IndexType>
 size_type IndexSet<IndexType>::pop_front()
 {
-    GKO_ASSERT(is_empty() == false);
+    GKO_ASSERT_CONDITION(is_empty() == false);
 
     const size_type index = subsets_.front().begin_;
     ++subsets_.front().begin_;
@@ -643,7 +646,7 @@ typename IndexSet<IndexType>::ElementIterator IndexSet<IndexType>::at(
     const size_type global_index) const
 {
     merge();
-    GKO_ASSERT(global_index < this->get_size());
+    GKO_ASSERT_CONDITION(global_index < this->get_size());
 
     if (subsets_.empty()) return end();
 
@@ -722,7 +725,7 @@ void IndexSet<IndexType>::merge_impl() const
     // in parallel (and these 'const' functions can then call merge()
     // which itself calls the current function)
     // std::lock_guard<std::mutex> lock(merge_mutex_);
-    // TODO: Mutex setup for multi-threaded
+    std::lock_guard<std::mutex> lock(merge_mutex_);
 
     // see if any of the contiguous subsets_ can be merged. do not use
     // std::vector::erase in-place as it is quadratic in the number of
@@ -758,7 +761,7 @@ void IndexSet<IndexType>::merge_impl() const
     size_type next_index = 0, largest_subset_size = 0;
     for (typename std::vector<subset>::iterator i = subsets_.begin();
          i != subsets_.end(); ++i) {
-        GKO_ASSERT(i->begin_ < i->end_);
+        GKO_ASSERT_CONDITION(i->begin_ < i->end_);
 
         i->superset_index_ = next_index;
         next_index += (i->end_ - i->begin_);
@@ -771,7 +774,7 @@ void IndexSet<IndexType>::merge_impl() const
 
     // check that next_index is correct. needs to be after the previous
     // statement because we otherwise will get into an endless loop
-    GKO_ASSERT(next_index == get_num_elements());
+    GKO_ASSERT_CONDITION(next_index == get_num_elems());
 }
 
 
