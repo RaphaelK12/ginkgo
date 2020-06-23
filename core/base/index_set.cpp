@@ -653,7 +653,7 @@ typename IndexSet<IndexType>::ElementIterator IndexSet<IndexType>::at(
     typename std::vector<subset>::const_iterator main_subset =
         subsets_.begin() + largest_subset_;
 
-    subset r(global_index, global_index + 1);
+    subset s(global_index, global_index + 1);
     // This optimization makes the bounds for lower_bound smaller by
     // checking the largest subset first.
     typename std::vector<subset>::const_iterator subset_begin, subset_end;
@@ -668,7 +668,7 @@ typename IndexSet<IndexType>::ElementIterator IndexSet<IndexType>::at(
     // This will give us the first subset p=[a,b[ with b>=global_index using
     // a binary search
     const typename std::vector<subset>::const_iterator p =
-        std::lower_bound(subset_begin, subset_end, r, subset::compare_end);
+        std::lower_bound(subset_begin, subset_end, s, subset::compare_end);
 
     // We couldn't find a subset, which means we have no subset that
     // contains global_index and also no subset behind it, meaning we need

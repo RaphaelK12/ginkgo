@@ -309,4 +309,61 @@ TYPED_TEST(IndexSet, CanBeCleared)
 }
 
 
+TYPED_TEST(IndexSet, ReturnsBeginOfIndexSet)
+{
+    auto idx_set = gko::IndexSet<TypeParam>{15};
+    idx_set.add_subset(3, 7);
+    idx_set.add_subset(8, 13);
+
+    ASSERT_EQ(*idx_set.begin(), 3);
+}
+
+
+TYPED_TEST(IndexSet, ReturnsSpecificElementOfIndexSet)
+{
+    auto idx_set = gko::IndexSet<TypeParam>{55};
+    idx_set.add_subset(3, 7);
+    idx_set.add_subset(25, 43);
+    ASSERT_EQ(*idx_set.at(5), 5);
+    ASSERT_EQ(*idx_set.at(24), 25);
+    ASSERT_THROW(*idx_set.at(44), gko::ConditionUnsatisfied);
+}
+
+
+TYPED_TEST(IndexSet, ReturnsFirstIntervalOfSet)
+{
+    auto idx_set = gko::IndexSet<TypeParam>{15};
+    idx_set.add_subset(3, 7);
+    idx_set.add_subset(8, 13);
+    auto first_int = idx_set.first_interval();
+    ASSERT_EQ((*first_int).get_num_elems(), 4);
+}
+
+
+TYPED_TEST(IndexSet, KnowsIndicesWithinIntervals)
+{
+    auto idx_set = gko::IndexSet<TypeParam>{15};
+    idx_set.add_subset(2, 5);
+    idx_set.add_subset(6, 8);
+    idx_set.add_subset(10, 14);
+    auto first_int = idx_set.first_interval();
+    ASSERT_EQ(*(*first_int).begin(), 2);
+    ASSERT_EQ((*first_int).last(), 4);
+    ASSERT_EQ(*(*++first_int).begin(), 6);
+    ASSERT_EQ((*first_int).last(), 7);
+    ASSERT_EQ(*(*++first_int).begin(), 10);
+    ASSERT_EQ((*first_int).last(), 13);
+}
+
+
+TYPED_TEST(IndexSet, CanIncrementBetweenIntervals)
+{
+    auto idx_set = gko::IndexSet<TypeParam>{15};
+    idx_set.add_subset(3, 7);
+    idx_set.add_subset(8, 14);
+    auto first_int = idx_set.first_interval();
+    ASSERT_EQ((*(++first_int)).get_num_elems(), 6);
+}
+
+
 }  // namespace
