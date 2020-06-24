@@ -75,6 +75,25 @@ inline void free_comm(MPI_Comm &comm)
     GKO_ASSERT_NO_MPI_ERRORS(MPI_Comm_free(&comm));
 }
 
+
+inline void send(const void *send_buffer, const int send_count,
+                 MPI_Datatype &send_type, const int destination_rank,
+                 const int send_tag, MPI_Comm &comm)
+{
+    GKO_ASSERT_NO_MPI_ERRORS(MPI_Send(send_buffer, send_count, send_type,
+                                      destination_rank, send_tag, comm));
+}
+
+
+inline void recv(void *recv_buffer, const int recv_count,
+                 MPI_Datatype &recv_type, const int source_rank,
+                 const int recv_tag, MPI_Comm &comm, MPI_Status *status)
+{
+    GKO_ASSERT_NO_MPI_ERRORS(MPI_Recv(recv_buffer, recv_count, recv_type,
+                                      source_rank, recv_tag, comm, status));
+}
+
+
 inline void gather(const void *send_buffer, const int send_count,
                    MPI_Datatype &send_type, void *recv_buffer,
                    const int recv_count, MPI_Datatype &recv_type, int root,

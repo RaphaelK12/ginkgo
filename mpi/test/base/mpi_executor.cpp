@@ -42,6 +42,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "gtest-mpi-main.hpp"
 
 
+#include <ginkgo/core/base/array.hpp>
 #include <ginkgo/core/base/exception.hpp>
 #include <ginkgo/core/base/exception_helpers.hpp>
 #include <ginkgo/core/base/executor.hpp>
@@ -104,6 +105,180 @@ TEST_F(MpiExecutor, KnowsItsSubExecutors)
 
     EXPECT_EQ(typeid(*(omp.get())).name(), typeid(*(sub_exec.get())).name());
     EXPECT_NE(typeid(*(ref.get())).name(), typeid(*(sub_exec.get())).name());
+}
+
+
+TEST_F(MpiExecutor, CanSendAndRecvValues)
+{
+    using ValueType = int;
+    auto sub_exec = mpi->get_sub_executor();
+    auto my_rank = mpi->get_my_rank();
+    auto num_ranks = mpi->get_num_ranks();
+    auto send_array = gko::Array<ValueType>{sub_exec};
+    auto recv_array = gko::Array<ValueType>{sub_exec};
+    int *data;
+    if (my_rank == 0) {
+        data = new ValueType[4]{1, 2, 3, 4};
+        send_array = gko::Array<ValueType>{
+            sub_exec, gko::Array<ValueType>::view(sub_exec, 4, data)};
+        mpi->send<ValueType>(send_array.get_data(), 4, 1, 42);
+    } else {
+        recv_array = gko::Array<ValueType>{sub_exec, 4};
+        mpi->recv<ValueType>(recv_array.get_data(), 4, 0, 42);
+    }
+    if (my_rank == 1) {
+        ASSERT_EQ(recv_array.get_data()[0], 1);
+        ASSERT_EQ(recv_array.get_data()[1], 2);
+        ASSERT_EQ(recv_array.get_data()[2], 3);
+        ASSERT_EQ(recv_array.get_data()[3], 4);
+    }
+    if (my_rank == 0) {
+        delete data;
+    }
+}
+
+
+TEST_F(MpiExecutor, CanScatterValues)
+{
+    auto sub_exec = mpi->get_sub_executor();
+    auto my_rank = mpi->get_my_rank();
+    double *data;
+    auto scatter_from_array = gko::Array<double>{sub_exec->get_master()};
+    if (my_rank == 0) {
+        // clang-format off
+        data = new double[6]{ 2.0, 3.0, 1.0,
+                              3.0,-1.0, 0.0};
+        // clang-format on
+        scatter_from_array =
+            gko::Array<double>{sub_exec->get_master(),
+                               gko::Array<double>::view(sub_exec, 6, data)};
+    }
+    auto scatter_into_array = gko::Array<double>{sub_exec, 3};
+    mpi->scatter<double, double>(scatter_from_array.get_data(), 3,
+                                 scatter_into_array.get_data(), 3, 0);
+    auto comp_data = scatter_into_array.get_data();
+    if (my_rank == 0) {
+        ASSERT_EQ(comp_data[0], 2.0);
+        ASSERT_EQ(comp_data[1], 3.0);
+        ASSERT_EQ(comp_data[2], 1.0);
+        delete data;
+    } else {
+        ASSERT_EQ(comp_data[0], 3.0);
+        ASSERT_EQ(comp_data[1], -1.0);
+        ASSERT_EQ(comp_data[2], 0.0);
+    }
+}
+
+
+TEST_F(MpiExecutor, CanGatherValues)
+{
+    auto sub_exec = mpi->get_sub_executor();
+    auto my_rank = mpi->get_my_rank();
+    auto num_ranks = mpi->get_num_ranks();
+    int data;
+    if (my_rank == 0) {
+        data = 3;
+    } else {
+        data = 5;
+    }
+    auto gather_array =
+        gko::Array<int>{sub_exec, static_cast<gko::size_type>(num_ranks)};
+    mpi->gather<int, int>(&data, 1, gather_array.get_data(), 1, 0);
+    if (my_rank == 0) {
+        ASSERT_EQ(gather_array.get_data()[0], 3);
+        ASSERT_EQ(gather_array.get_data()[1], 5);
+    }
+}
+
+
+TEST_F(MpiExecutor, CanScatterValuesWithDisplacements)
+{
+    auto sub_exec = mpi->get_sub_executor();
+    auto my_rank = mpi->get_my_rank();
+    auto num_ranks = mpi->get_num_ranks();
+    double *data;
+    auto scatter_from_array = gko::Array<double>{sub_exec};
+    auto s_counts = gko::Array<int>{sub_exec->get_master(),
+                                    static_cast<gko::size_type>(num_ranks)};
+    auto displacements = gko::Array<int>{sub_exec->get_master()};
+    int nelems;
+    if (my_rank == 0) {
+        // clang-format off
+        data = new double[6]{ 2.0, 3.0, 1.0,
+                              3.0,-1.0, 0.0};
+        // clang-format on
+        scatter_from_array = gko::Array<double>{
+            sub_exec->get_master(),
+            gko::Array<double>::view(sub_exec->get_master(), 6, data)};
+        nelems = 2;
+        displacements = gko::Array<int>{sub_exec->get_master(), {0, 2}};
+    } else {
+        nelems = 4;
+    }
+
+    mpi->gather<int, int>(&nelems, 1, s_counts.get_data(), 1, 0);
+    auto scatter_into_array = gko::Array<double>{sub_exec, 4};
+    mpi->scatter<double, double>(scatter_from_array.get_data(),
+                                 s_counts.get_data(), displacements.get_data(),
+                                 scatter_into_array.get_data(), nelems, 0);
+    auto comp_data = scatter_into_array.get_data();
+    if (my_rank == 0) {
+        ASSERT_EQ(comp_data[0], 2.0);
+        ASSERT_EQ(comp_data[1], 3.0);
+        delete data;
+    } else {
+        ASSERT_EQ(comp_data[0], 1.0);
+        ASSERT_EQ(comp_data[1], 3.0);
+        ASSERT_EQ(comp_data[2], -1.0);
+        ASSERT_EQ(comp_data[3], 0.0);
+    }
+}
+
+
+TEST_F(MpiExecutor, CanGatherValuesWithDisplacements)
+{
+    auto sub_exec = mpi->get_sub_executor();
+    auto my_rank = mpi->get_my_rank();
+    auto num_ranks = mpi->get_num_ranks();
+    double *data;
+    auto gather_from_array = gko::Array<double>{sub_exec};
+    auto gather_into_array = gko::Array<double>{sub_exec};
+    auto r_counts = gko::Array<int>{sub_exec->get_master(),
+                                    static_cast<gko::size_type>(num_ranks)};
+    auto displacements = gko::Array<int>{sub_exec->get_master()};
+    int nelems;
+    if (my_rank == 0) {
+        data = new double[2]{2.0, 3.0};
+        gather_from_array = gko::Array<double>{
+            sub_exec->get_master(),
+            gko::Array<double>::view(sub_exec->get_master(), 2, data)};
+        nelems = 2;
+        displacements = gko::Array<int>{sub_exec->get_master(), {0, 2}};
+        gather_into_array = gko::Array<double>{sub_exec, 6};
+    } else {
+        data = new double[4]{1.0, 3.0, -1.0, 0.0};
+        nelems = 4;
+        gather_from_array = gko::Array<double>{
+            sub_exec->get_master(),
+            gko::Array<double>::view(sub_exec->get_master(), 4, data)};
+    }
+
+    mpi->gather<int, int>(&nelems, 1, r_counts.get_data(), 1, 0);
+    mpi->gather<double, double>(
+        gather_from_array.get_data(), nelems, gather_into_array.get_data(),
+        r_counts.get_data(), displacements.get_data(), 0);
+    auto comp_data = gather_into_array.get_data();
+    if (my_rank == 0) {
+        ASSERT_EQ(comp_data[0], 2.0);
+        ASSERT_EQ(comp_data[1], 3.0);
+        ASSERT_EQ(comp_data[2], 1.0);
+        ASSERT_EQ(comp_data[3], 3.0);
+        ASSERT_EQ(comp_data[4], -1.0);
+        ASSERT_EQ(comp_data[5], 0.0);
+    } else {
+        ASSERT_EQ(comp_data, nullptr);
+    }
+    delete data;
 }
 
 

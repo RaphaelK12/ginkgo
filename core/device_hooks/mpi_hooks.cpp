@@ -93,6 +93,18 @@ void MpiExecutor::synchronize_communicator(MPI_Comm &comm) const
 void MpiExecutor::synchronize() const GKO_NOT_COMPILED(mpi);
 
 
+template <typename SendType>
+void MpiExecutor::send(const SendType *send_buffer, const int send_count,
+                       const int destination_rank, const int send_tag)
+    GKO_NOT_COMPILED(mpi);
+
+
+template <typename RecvType>
+void MpiExecutor::recv(RecvType *recv_buffer, const int recv_count,
+                       const int source_rank, const int recv_tag)
+    GKO_NOT_COMPILED(mpi);
+
+
 template <typename SendType, typename RecvType>
 void MpiExecutor::gather(const SendType *send_buffer, const int send_count,
                          RecvType *recv_buffer, const int recv_count,
@@ -121,6 +133,20 @@ void MpiExecutor::scatter(const SendType *send_buffer, const int *send_counts,
 
 MPI_Comm MpiExecutor::create_communicator(MPI_Comm &comm_in, int color, int key)
     GKO_NOT_COMPILED(mpi);
+
+
+#define GKO_DECLARE_ARRAY_SEND(SendType)                                      \
+    void MpiExecutor::send(const SendType *send_buffer, const int send_count, \
+                           const int destination_rank, const int send_tag)
+
+GKO_INSTANTIATE_FOR_EACH_SEPARATE_VALUE_AND_INDEX_TYPE(GKO_DECLARE_ARRAY_SEND)
+
+
+#define GKO_DECLARE_ARRAY_RECV(RecvType)                                \
+    void MpiExecutor::recv(RecvType *recv_buffer, const int recv_count, \
+                           const int source_rank, const int recv_tag)
+
+GKO_INSTANTIATE_FOR_EACH_SEPARATE_VALUE_AND_INDEX_TYPE(GKO_DECLARE_ARRAY_RECV)
 
 
 #define GKO_DECLARE_ARRAY_GATHER1(SendType, RecvType)                     \

@@ -65,6 +65,7 @@ struct machineInfoContext;
 #ifndef MPI_VERSION
 
 using MPI_Comm = int;
+using MPI_Status = int;
 using MPI_Request = int;
 using MPI_Datatype = int;
 using MPI_Op = int;
@@ -900,6 +901,16 @@ public:
         return sub_exec_list_;
     }
 
+    // MPI_Send
+    template <typename SendType>
+    void send(const SendType *send_buffer, const int send_count,
+              const int destination_rank, const int send_tag);
+
+    // MPI_Recv
+    template <typename RecvType>
+    void recv(RecvType *recv_buffer, const int recv_count,
+              const int source_rank, const int recv_tag);
+
     // MPI_Gather
     template <typename SendType, typename RecvType>
     void gather(const SendType *send_buffer, const int send_count,
@@ -970,10 +981,10 @@ private:
     std::vector<std::string> sub_exec_list_;
     std::shared_ptr<Executor> sub_executor_;
 
-    // template <typename T>
-    // using comm_manager = std::unique_ptr<T, std::function<void(T *)>>;
-    // comm_manager<MPI_Comm> mpi_comm_;
     MPI_Comm mpi_comm_;
+    template <typename T>
+    using status_manager = std::unique_ptr<T, std::function<void(T *)>>;
+    status_manager<MPI_Status> mpi_status_;
 
     std::unique_ptr<mpi_exec_info> exec_info_;
     std::shared_ptr<MemorySpace> mem_space_instance_;

@@ -112,6 +112,26 @@ int MpiExecutor::get_num_ranks() const
 }
 
 
+template <typename SendType>
+void MpiExecutor::send(const SendType *send_buffer, const int send_count,
+                       const int destination_rank, const int send_tag)
+{
+    auto send_type = helpers::mpi::get_mpi_type(send_buffer[0]);
+    bindings::mpi::send(send_buffer, send_count, send_type, destination_rank,
+                        send_tag, this->mpi_comm_);
+}
+
+
+template <typename RecvType>
+void MpiExecutor::recv(RecvType *recv_buffer, const int recv_count,
+                       const int source_rank, const int recv_tag)
+{
+    auto recv_type = helpers::mpi::get_mpi_type(recv_buffer[0]);
+    bindings::mpi::recv(recv_buffer, recv_count, recv_type, source_rank,
+                        recv_tag, this->mpi_comm_, this->mpi_status_.get());
+}
+
+
 template <typename SendType, typename RecvType>
 void MpiExecutor::gather(const SendType *send_buffer, const int send_count,
                          RecvType *recv_buffer, const int recv_count,
@@ -208,6 +228,20 @@ MPI_Comm MpiExecutor::create_communicator(MPI_Comm &comm_in, int color, int key)
 {
     return bindings::mpi::create_comm(comm_in, color, key);
 }
+
+
+#define GKO_DECLARE_ARRAY_SEND(SendType)                                      \
+    void MpiExecutor::send(const SendType *send_buffer, const int send_count, \
+                           const int destination_rank, const int send_tag)
+
+GKO_INSTANTIATE_FOR_EACH_SEPARATE_VALUE_AND_INDEX_TYPE(GKO_DECLARE_ARRAY_SEND)
+
+
+#define GKO_DECLARE_ARRAY_RECV(RecvType)                                \
+    void MpiExecutor::recv(RecvType *recv_buffer, const int recv_count, \
+                           const int source_rank, const int recv_tag)
+
+GKO_INSTANTIATE_FOR_EACH_SEPARATE_VALUE_AND_INDEX_TYPE(GKO_DECLARE_ARRAY_RECV)
 
 
 #define GKO_DECLARE_ARRAY_GATHER1(SendType, RecvType)                     \
