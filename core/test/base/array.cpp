@@ -288,6 +288,35 @@ TYPED_TEST(Array, CanBeResized)
 }
 
 
+TYPED_TEST(Array, CanBeConcatenatedWithData)
+{
+    TypeParam data[] = {9, 2, 3};
+    this->x.concatenate(this->exec, 3, data);
+
+
+    EXPECT_EQ(this->x.get_const_data()[0], TypeParam{5});
+    EXPECT_EQ(this->x.get_const_data()[1], TypeParam{2});
+    EXPECT_EQ(this->x.get_const_data()[2], TypeParam{9});
+    EXPECT_EQ(this->x.get_const_data()[3], TypeParam{2});
+    EXPECT_EQ(this->x.get_const_data()[4], TypeParam{3});
+}
+
+
+TYPED_TEST(Array, CanBeConcatenatedWithArray)
+{
+    TypeParam data[] = {9, 5, 3};
+    auto arr2 = gko::Array<TypeParam>::view(this->exec, 3, data);
+    this->x.concatenate(arr2);
+
+
+    EXPECT_EQ(this->x.get_const_data()[0], TypeParam{5});
+    EXPECT_EQ(this->x.get_const_data()[1], TypeParam{2});
+    EXPECT_EQ(this->x.get_const_data()[2], TypeParam{9});
+    EXPECT_EQ(this->x.get_const_data()[3], TypeParam{5});
+    EXPECT_EQ(this->x.get_const_data()[4], TypeParam{3});
+}
+
+
 TYPED_TEST(Array, ViewCannotBeResized)
 {
     TypeParam data[] = {1, 2, 3};

@@ -303,6 +303,45 @@ public:
     }
 
     /**
+     * Concatenates with another array.
+     *
+     * @param other  the Array to concatenate
+     */
+    void concatenate(const Array &other)
+    {
+        Array tmp(*this);
+        auto updated_num_elems = this->get_num_elems() + other.get_num_elems();
+        this->resize_and_reset(updated_num_elems);
+        this->get_executor()->get_mem_space()->copy_from(
+            this->get_executor()->get_mem_space().get(), tmp.get_num_elems(),
+            tmp.get_const_data(), this->get_data());
+        this->get_executor()->get_mem_space()->copy_from(
+            other.get_executor()->get_mem_space().get(), other.get_num_elems(),
+            other.get_const_data(), &this->get_data()[tmp.get_num_elems()]);
+    }
+
+    /**
+     * Concatenates with some data.
+     *
+     * @param exec  executor where `data` is located
+     * @param num_elems  number of elements in `data`
+     * @param data  chunk of memory to be concatenated
+     */
+    void concatenate(std::shared_ptr<const Executor> exec, size_type num_elems,
+                     value_type *data)
+    {
+        Array tmp(*this);
+        auto updated_num_elems = this->get_num_elems() + num_elems;
+        this->resize_and_reset(updated_num_elems);
+        this->get_executor()->get_mem_space()->copy_from(
+            this->get_executor()->get_mem_space().get(), tmp.get_num_elems(),
+            tmp.get_const_data(), this->get_data());
+        this->get_executor()->get_mem_space()->copy_from(
+            exec->get_mem_space().get(), num_elems, data,
+            &this->get_data()[tmp.get_num_elems()]);
+    }
+
+    /**
      * Copies data from another array or view. In the case of an array target,
      * the array is resized to match the source's size. In the case of a view
      * target, if the dimensions are not compatible a gko::OutOfBoundsError is
