@@ -74,32 +74,101 @@ template <typename IndexType>
 Array<ValueType> Array<ValueType>::distribute_data(
     std::shared_ptr<gko::Executor> exec, const IndexSet<IndexType> &index_set)
 {
-    GKO_ASSERT_MPI_EXEC(exec.get());
+    using itype = int;
+    auto mpi_exec = as<gko::MpiExecutor>(exec.get());
     auto sub_exec = exec->get_sub_executor();
-    auto mpi_exec = dynamic_cast<gko::MpiExecutor *>(exec.get());
     auto num_ranks = mpi_exec->get_num_ranks();
     auto my_rank = mpi_exec->get_my_rank();
     auto root_rank = mpi_exec->get_root_rank();
-    auto comm = mpi_exec->get_communicator();
 
     // int because MPI functions only support 32 bit integers.
-    auto num_elems = static_cast<int>(index_set.get_num_elements());
-    auto distributed_array = Array{exec, index_set.get_num_elements()};
-    auto send_counts =
-        Array<int>{sub_exec->get_master(), static_cast<size_type>(num_ranks)};
-    mpi_exec->gather<int, int>(&num_elems, 1, send_counts.get_data(), 1,
-                               root_rank);
-    auto displacements = Array<int>{send_counts};
-    // IMPROVE-ME
-    std::partial_sum(displacements.get_data(),
-                     displacements.get_data() + displacements.get_num_elems(),
-                     displacements.get_data());
-    for (auto i = 0; i < displacements.get_num_elems(); ++i) {
-        displacements.get_data()[i] -= send_counts.get_data()[i];
+    itype num_subsets = index_set.get_num_subsets();
+    auto num_subsets_array =
+        Array<itype>{sub_exec->get_master(), static_cast<size_type>(num_ranks)};
+    mpi_exec->gather<itype, itype>(&num_subsets, 1,
+                                   num_subsets_array.get_data(), 1, root_rank);
+    auto total_num_subsets =
+        std::accumulate(num_subsets_array.get_data(),
+                        num_subsets_array.get_data() + num_ranks, 0);
+    itype num_elems = static_cast<itype>(index_set.get_num_elems());
+    auto num_elems_array =
+        Array<itype>{sub_exec->get_master(), static_cast<size_type>(num_ranks)};
+    mpi_exec->gather<itype, itype>(&num_elems, 1, num_elems_array.get_data(), 1,
+                                   root_rank);
+
+    auto start_idx_array = Array<itype>{sub_exec->get_master(),
+                                        static_cast<size_type>(num_subsets)};
+    auto num_elems_in_subset = Array<itype>{
+        sub_exec->get_master(), static_cast<size_type>(num_subsets)};
+    auto offset_array =
+        Array<itype>{sub_exec->get_master(),
+                     static_cast<size_type>(num_ranks * total_num_subsets)};
+    auto global_num_elems_subset_array =
+        Array<itype>{sub_exec->get_master(),
+                     static_cast<size_type>(num_ranks * total_num_subsets)};
+    auto first_interval = (index_set.get_first_interval());
+    for (auto i = 0; i < num_subsets; ++i) {
+        start_idx_array.get_data()[i] = *(*first_interval).begin();
+        num_elems_in_subset.get_data()[i] = (*first_interval).get_num_elems();
+        first_interval++;
     }
-    mpi_exec->scatter<ValueType, ValueType>(
-        data_.get(), send_counts.get_data(), displacements.get_data(),
-        distributed_array.get_data(), num_elems, root_rank);
+    auto displ = gko::Array<itype>{num_subsets_array};
+    std::partial_sum(displ.get_data(), displ.get_data() + displ.get_num_elems(),
+                     displ.get_data());
+    for (auto i = 0; i < displ.get_num_elems(); ++i) {
+        displ.get_data()[i] -= num_subsets_array.get_data()[i];
+    }
+    mpi_exec->gather<itype, itype>(
+        start_idx_array.get_data(), num_subsets, offset_array.get_data(),
+        num_subsets_array.get_data(), displ.get_data(), root_rank);
+    mpi_exec->gather<itype, itype>(num_elems_in_subset.get_data(), num_subsets,
+                                   global_num_elems_subset_array.get_data(),
+                                   num_subsets_array.get_data(),
+                                   displ.get_data(), root_rank);
+
+    auto tag = my_rank + 40;
+    auto tags = gko::Array<itype>{sub_exec->get_master(),
+                                  static_cast<size_type>(num_ranks)};
+    mpi_exec->gather<itype, itype>(&tag, 1, tags.get_data(), 1, root_rank);
+
+    auto distributed_array = Array{exec, index_set.get_num_elems()};
+    auto idx = 0;
+    for (auto in_rank = 0; in_rank < num_ranks; ++in_rank) {
+        auto n_subsets = num_subsets_array.get_data()[in_rank];
+        if (in_rank != root_rank) {
+            if (my_rank == root_rank) {
+                for (auto in_subset = 0; in_subset < n_subsets; ++in_subset) {
+                    auto offset = offset_array.get_data()[idx];
+                    auto g_n_elems =
+                        global_num_elems_subset_array.get_data()[idx];
+                    mpi_exec->send(&data_.get()[offset], g_n_elems, in_rank,
+                                   tags.get_data()[in_rank]);
+                    idx++;
+                }
+            } else {
+                auto offset = 0;
+                for (auto in_subset = 0; in_subset < num_subsets; ++in_subset) {
+                    auto n_elems = num_elems_in_subset.get_data()[in_subset];
+                    mpi_exec->recv(&distributed_array.get_data()[offset],
+                                   n_elems, root_rank, tag);
+                    offset += n_elems;
+                }
+            }
+        }
+        idx += n_subsets;
+    }
+
+    if (my_rank == root_rank) {
+        auto offset = 0;
+        for (auto in_subset = 0; in_subset < num_subsets; ++in_subset) {
+            auto n_elems = num_elems_in_subset.get_data()[in_subset];
+            auto start_idx = start_idx_array.get_data()[in_subset];
+            distributed_array.get_executor()->get_mem_space()->copy_from(
+                sub_exec->get_mem_space().get(), n_elems,
+                &data_.get()[start_idx], &distributed_array.get_data()[offset]);
+            offset += n_elems;
+        }
+    }
 
     return std::move(distributed_array);
 }

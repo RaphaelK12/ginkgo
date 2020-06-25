@@ -697,19 +697,19 @@ typename IndexSet<IndexType>::ElementIterator IndexSet<IndexType>::end() const
 
 template <typename IndexType>
 typename IndexSet<IndexType>::IntervalIterator
-IndexSet<IndexType>::first_interval() const
+IndexSet<IndexType>::get_first_interval() const
 {
     merge();
     if (subsets_.size() > 0)
         return IntervalIterator(this, 0);
     else
-        return last_interval();
+        return get_last_interval();
 }
 
 
 template <typename IndexType>
 typename IndexSet<IndexType>::IntervalIterator
-IndexSet<IndexType>::last_interval() const
+IndexSet<IndexType>::get_last_interval() const
 {
     merge();
     return IntervalIterator(this);

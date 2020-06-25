@@ -800,13 +800,13 @@ public:
     /**
      * Return an Iterator that points at the first interval of this IndexSet.
      */
-    IntervalIterator first_interval() const;
+    IntervalIterator get_first_interval() const;
 
     /**
      * Return an Iterator that points one after the last interval of this
      * IndexSet.
      */
-    IntervalIterator last_interval() const;
+    IntervalIterator get_last_interval() const;
 
 private:
     struct subset {
