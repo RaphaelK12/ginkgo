@@ -126,10 +126,17 @@ Array<ValueType> Array<ValueType>::distribute_data(
                                    num_subsets_array.get_data(),
                                    displ.get_data(), root_rank);
 
-    auto tag = my_rank + 40;
-    auto tags = gko::Array<itype>{sub_exec->get_master(),
-                                  static_cast<size_type>(num_ranks)};
-    mpi_exec->gather<itype, itype>(&tag, 1, tags.get_data(), 1, root_rank);
+    auto tag = gko::Array<itype>{sub_exec->get_master(),
+                                 static_cast<size_type>(num_subsets)};
+    for (auto t = 0; t < num_subsets; ++t) {
+        tag.get_data()[t] = (my_rank + 1) * 1e4 + t;
+    }
+    auto tags = gko::Array<itype>{
+        sub_exec->get_master(),
+        static_cast<size_type>(num_ranks * total_num_subsets)};
+    mpi_exec->gather<itype, itype>(tag.get_data(), num_subsets, tags.get_data(),
+                                   num_subsets_array.get_data(),
+                                   displ.get_data(), root_rank);
 
     auto distributed_array = Array{exec, index_set.get_num_elems()};
     auto idx = 0;
@@ -142,36 +149,32 @@ Array<ValueType> Array<ValueType>::distribute_data(
                     auto g_n_elems =
                         global_num_elems_subset_array.get_data()[idx];
                     mpi_exec->send(&data_.get()[offset], g_n_elems, in_rank,
-                                   tags.get_data()[in_rank]);
+                                   tags.get_data()[idx]);
                     idx++;
                 }
-            } else {
-                auto offset = 0;
-                for (auto in_subset = 0; in_subset < num_subsets; ++in_subset) {
-                    auto n_elems = num_elems_in_subset.get_data()[in_subset];
-                    mpi_exec->recv(&distributed_array.get_data()[offset],
-                                   n_elems, root_rank, tag);
-                    offset += n_elems;
-                }
             }
+        } else {
+            idx += n_subsets;
         }
-        idx += n_subsets;
     }
-
-    if (my_rank == root_rank) {
-        auto offset = 0;
-        for (auto in_subset = 0; in_subset < num_subsets; ++in_subset) {
-            auto n_elems = num_elems_in_subset.get_data()[in_subset];
-            auto start_idx = start_idx_array.get_data()[in_subset];
+    auto offset = 0;
+    for (auto in_subset = 0; in_subset < num_subsets; ++in_subset) {
+        auto n_elems = num_elems_in_subset.get_data()[in_subset];
+        auto start_idx = start_idx_array.get_data()[in_subset];
+        if (my_rank != root_rank) {
+            mpi_exec->recv(&distributed_array.get_data()[offset], n_elems,
+                           root_rank, tag.get_data()[in_subset]);
+        } else {
             distributed_array.get_executor()->get_mem_space()->copy_from(
                 sub_exec->get_mem_space().get(), n_elems,
                 &data_.get()[start_idx], &distributed_array.get_data()[offset]);
-            offset += n_elems;
         }
+        offset += n_elems;
     }
 
     return std::move(distributed_array);
 }
+
 
 #define GKO_DECLARE_ARRAY_DISTRIBUTE(ValueType, IndexType) \
     Array<ValueType> Array<ValueType>::distribute_data(    \

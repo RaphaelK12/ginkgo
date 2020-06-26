@@ -39,6 +39,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "gtest-mpi-main.hpp"
 
 
+#include <ginkgo/core/base/array.hpp>
 #include <ginkgo/core/base/executor.hpp>
 #include <ginkgo/core/base/index_set.hpp>
 #include <ginkgo/core/base/range.hpp>
@@ -52,25 +53,20 @@ namespace {
 
 
 template <typename T>
-class DistributedArray : public ::testing::Test {
+class MultiRankDistribute : public ::testing::Test {
 protected:
     using value_type = T;
     using Mtx = gko::matrix::Dense<value_type>;
-    DistributedArray() : mpi_exec(nullptr) {}
+    MultiRankDistribute() : mpi_exec(nullptr) {}
 
     void SetUp()
     {
         char **argv;
         int argc = 0;
-        exec = gko::OmpExecutor::create();
         mpi_exec = gko::MpiExecutor::create({"omp"});
         sub_exec = mpi_exec->get_sub_executor();
         rank = mpi_exec->get_my_rank();
         ASSERT_GT(mpi_exec->get_num_ranks(), 1);
-        mtx1 = gko::initialize<Mtx>({I<T>({1.0, -1.0}), I<T>({-2.0, 2.0})},
-                                    sub_exec);
-        mtx2 =
-            gko::initialize<Mtx>({{1.0, 2.0, 3.0}, {0.5, 1.5, 2.5}}, sub_exec);
     }
 
     void TearDown()
@@ -79,12 +75,6 @@ protected:
             // ensure that previous calls finished and didn't throw an error
             ASSERT_NO_THROW(mpi_exec->synchronize());
         }
-    }
-
-    static void assert_empty(gko::matrix::Dense<value_type> *m)
-    {
-        ASSERT_EQ(m->get_size(), gko::dim<2>(0, 0));
-        ASSERT_EQ(m->get_num_stored_elements(), 0);
     }
 
     static void assert_equal_arrays(const gko::Array<value_type> &m,
@@ -98,17 +88,14 @@ protected:
     }
 
     std::shared_ptr<gko::MpiExecutor> mpi_exec;
-    std::shared_ptr<const gko::Executor> exec;
     std::shared_ptr<const gko::Executor> sub_exec;
-    std::unique_ptr<Mtx> mtx1;
-    std::unique_ptr<Mtx> mtx2;
     int rank;
 };
 
-TYPED_TEST_CASE(DistributedArray, gko::test::ValueTypes);
+TYPED_TEST_CASE(MultiRankDistribute, gko::test::ValueTypes);
 
 
-TYPED_TEST(DistributedArray, CanDistributeArray)
+TYPED_TEST(MultiRankDistribute, CanSimpleDistributeArray)
 {
     using value_type = typename TestFixture::value_type;
     value_type *data;
@@ -117,34 +104,44 @@ TYPED_TEST(DistributedArray, CanDistributeArray)
     gko::Array<value_type> m{this->mpi_exec};
     gko::Array<value_type> orig_array{sub_exec};
     gko::Array<value_type> lm{sub_exec};
-    gko::IndexSet<gko::int32> index_set{20};
+    gko::IndexSet<gko::int32> index_set{40};
     this->mpi_exec->set_root_rank(0);
     if (this->rank == 0) {
-        // clang-format off
-        data = new value_type[20]{
-                                 1.0, 2.0, -1.0, 2.0,
-                                 0.0, 4.0, -2.0, 9.0,
-                                 3.0, 7.0, 1.0, 0.2,
-                                 -3.0, 4.0, -1.0, 2.0,
-                                 5.0, 6.0, -1.0, 4.0};
-        comp_data = new value_type[8]{
-                                 1.0, 2.0, -1.0, 2.0,
-                                 0.0, 4.0, -2.0, 9.0};
-        // clang-format on
+        data = new value_type[28]{
+            1.0,  2.0,  -1.0, 2.0, 0.0,  4.0,  -2.0,  // 6
+            9.0,  -3.0, 7.0,  1.0, 0.2,  -3.5, 7.5,   // 13
+            -1.1, 6.2,  1.0,  4.5, -1.5, 3.0,  9.0,   // 20
+            4.0,  1.0,  3.5,  5.0, 6.0,  -1.0, 4.0    // 27
+        };
+        comp_data = new value_type[7]{
+            1.0, 2.0, -1.0, 2.0, 0.0, 4.0, -2.0  // 6
+        };
         orig_array = gko::Array<value_type>(
-            sub_exec, gko::Array<value_type>::view(sub_exec, 20, data));
+            sub_exec, gko::Array<value_type>::view(sub_exec, 28, data));
         lm = gko::Array<value_type>(
-            sub_exec, gko::Array<value_type>::view(sub_exec, 8, comp_data));
-        index_set.add_subset(0, 8);
-    } else {
-        // clang-format off
-        comp_data = new value_type[12]{3.0, 7.0, 1.0, 0.2,
-                                       -3.0, 4.0, -1.0, 2.0,
-                                       5.0, 6.0, -1.0, 4.0};
-        // clang-format on
-        index_set.add_subset(8, 20);
+            sub_exec, gko::Array<value_type>::view(sub_exec, 7, comp_data));
+        index_set.add_subset(0, 7);
+    } else if (this->rank == 1) {
+        comp_data = new value_type[7]{
+            9.0, -3.0, 7.0, 1.0, 0.2, -3.5, 7.5  // 13
+        };
+        index_set.add_subset(7, 14);
         lm = gko::Array<value_type>(
-            sub_exec, gko::Array<value_type>::view(sub_exec, 12, comp_data));
+            sub_exec, gko::Array<value_type>::view(sub_exec, 7, comp_data));
+    } else if (this->rank == 2) {
+        comp_data = new value_type[7]{
+            -1.1, 6.2, 1.0, 4.5, -1.5, 3.0, 9.0  // 20
+        };
+        index_set.add_subset(14, 21);
+        lm = gko::Array<value_type>(
+            sub_exec, gko::Array<value_type>::view(sub_exec, 7, comp_data));
+    } else if (this->rank == 3) {
+        comp_data = new value_type[7]{
+            4.0, 1.0, 3.5, 5.0, 6.0, -1.0, 4.0  // 27
+        };
+        index_set.add_subset(21, 28);
+        lm = gko::Array<value_type>(
+            sub_exec, gko::Array<value_type>::view(sub_exec, 7, comp_data));
     }
     m = orig_array.distribute_data(this->mpi_exec, index_set);
     ASSERT_EQ(m.get_executor(), this->mpi_exec);
@@ -156,7 +153,7 @@ TYPED_TEST(DistributedArray, CanDistributeArray)
 }
 
 
-TYPED_TEST(DistributedArray, CanDistributeNonContiguousArrays)
+TYPED_TEST(MultiRankDistribute, CanDistributeArrayNonContiguous)
 {
     using value_type = typename TestFixture::value_type;
     value_type *data;
@@ -165,28 +162,42 @@ TYPED_TEST(DistributedArray, CanDistributeNonContiguousArrays)
     gko::Array<value_type> m{this->mpi_exec};
     gko::Array<value_type> orig_array{sub_exec};
     gko::Array<value_type> lm{sub_exec};
-    gko::IndexSet<gko::int32> index_set{20};
+    gko::IndexSet<gko::int32> index_set{40};
     this->mpi_exec->set_root_rank(0);
     if (this->rank == 0) {
-        data = new value_type[20]{1.0, 2.0,  -1.0, 2.0,  5.0,  4.0, 1.0,
-                                  7.0, 2.0,  -2.0, -1.0, 3.0,  3.0, 8.0,
-                                  1.0, -3.0, 5.0,  6.0,  -1.0, 4.0};
-        comp_data = new value_type[10]{1.0, 2.0, -1.0, 2.0,  5.0,
-
-                                       3.0, 8.0, 1.0,  -3.0, 5.0};
+        data = new value_type[28]{
+            1.0,  2.0,  -1.0, 2.0, 0.0,  4.0,  -2.0,  // 6
+            9.0,  -3.0, 7.0,  1.0, 0.2,  -3.5, 7.5,   // 13
+            -1.1, 6.2,  1.0,  4.5, -1.5, 3.0,  9.0,   // 20
+            4.0,  1.0,  3.5,  5.0, 6.0,  -1.0, 4.0    // 27
+        };
+        comp_data = new value_type[8]{2.0, 0.0, 9.0, -3.0, 7.0, 1.0, 0.2, -3.5};
         orig_array = gko::Array<value_type>(
-            sub_exec, gko::Array<value_type>::view(sub_exec, 20, data));
-        lm = gko::Array<TypeParam>(
-            sub_exec, gko::Array<value_type>::view(sub_exec, 10, comp_data));
-        index_set.add_subset(0, 5);
-        index_set.add_subset(12, 17);
-    } else {
-        comp_data = new value_type[10]{4.0,  1.0, 7.0, 2.0,  -2.0,
-                                       -1.0, 3.0, 6.0, -1.0, 4.0};
-        index_set.add_subset(5, 12);
-        index_set.add_subset(17, 20);
-        lm = gko::Array<TypeParam>(
-            sub_exec, gko::Array<value_type>::view(sub_exec, 10, comp_data));
+            sub_exec, gko::Array<value_type>::view(sub_exec, 28, data));
+        lm = gko::Array<value_type>(
+            sub_exec, gko::Array<value_type>::view(sub_exec, 8, comp_data));
+        index_set.add_subset(3, 5);
+        index_set.add_subset(7, 13);
+    } else if (this->rank == 1) {
+        comp_data = new value_type[5]{2.0, -1.0, 7.5, -1.1, 6.2};
+        index_set.add_subset(1, 3);
+        index_set.add_subset(13, 16);
+        lm = gko::Array<value_type>(
+            sub_exec, gko::Array<value_type>::view(sub_exec, 5, comp_data));
+    } else if (this->rank == 2) {
+        comp_data = new value_type[6]{1.0, 4.0, -2.0, 4.0, 1.0, 3.5};
+        index_set.add_subset(5, 7);
+        index_set.add_subset(0, 1);
+        index_set.add_subset(21, 24);
+        lm = gko::Array<value_type>(
+            sub_exec, gko::Array<value_type>::view(sub_exec, 6, comp_data));
+    } else if (this->rank == 3) {
+        comp_data =
+            new value_type[9]{1.0, 4.5, -1.5, 3.0, 9.0, 5.0, 6.0, -1.0, 4.0};
+        index_set.add_subset(16, 21);
+        index_set.add_subset(24, 28);
+        lm = gko::Array<value_type>(
+            sub_exec, gko::Array<value_type>::view(sub_exec, 9, comp_data));
     }
     m = orig_array.distribute_data(this->mpi_exec, index_set);
     ASSERT_EQ(m.get_executor(), this->mpi_exec);
