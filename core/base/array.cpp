@@ -90,6 +90,8 @@ Array<ValueType> Array<ValueType>::distribute_data(
     auto total_num_subsets =
         std::accumulate(num_subsets_array.get_data(),
                         num_subsets_array.get_data() + num_ranks, 0);
+    mpi_exec->broadcast(&total_num_subsets, 1, root_rank);
+
     itype num_elems = static_cast<itype>(index_set.get_num_elems());
     auto num_elems_array =
         Array<itype>{sub_exec->get_master(), static_cast<size_type>(num_ranks)};
@@ -139,6 +141,8 @@ Array<ValueType> Array<ValueType>::distribute_data(
                                    displ.get_data(), root_rank);
 
     auto distributed_array = Array{exec, index_set.get_num_elems()};
+    auto req_array =
+        mpi_exec->create_requests_array(num_ranks * total_num_subsets);
     auto idx = 0;
     for (auto in_rank = 0; in_rank < num_ranks; ++in_rank) {
         auto n_subsets = num_subsets_array.get_data()[in_rank];

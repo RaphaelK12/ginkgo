@@ -841,6 +841,8 @@ class MpiExecutor : public detail::ExecutorBase<MpiExecutor>,
 
 public:
     using mpi_exec_info = machine_config::topology<MpiExecutor>;
+    template <typename T>
+    using request_manager = std::unique_ptr<T, std::function<void(T *)>>;
 
     using DefaultMemorySpace = DistributedMemorySpace;
 
@@ -889,6 +891,8 @@ public:
 
     MPI_Comm create_communicator(MPI_Comm &comm, int color, int key);
 
+    request_manager<MPI_Request> create_requests_array(int size);
+
     /**
      * Get the Executor information for this executor
      *
@@ -904,12 +908,14 @@ public:
     // MPI_Send
     template <typename SendType>
     void send(const SendType *send_buffer, const int send_count,
-              const int destination_rank, const int send_tag);
+              const int destination_rank, const int send_tag,
+              bool non_blocking = false);
 
     // MPI_Recv
     template <typename RecvType>
     void recv(RecvType *recv_buffer, const int recv_count,
-              const int source_rank, const int recv_tag);
+              const int source_rank, const int recv_tag,
+              bool non_blocking = false);
 
     // MPI_Gather
     template <typename SendType, typename RecvType>
@@ -932,6 +938,10 @@ public:
     void scatter(const SendType *send_buffer, const int *send_counts,
                  const int *displacements, RecvType *recv_buffer,
                  const int recv_count, int root_rank);
+
+    // MPI_Bcast
+    template <typename BroadcastType>
+    void broadcast(BroadcastType *buffer, int count, int root_rank);
 
 protected:
     MpiExecutor() = delete;

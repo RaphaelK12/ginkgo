@@ -84,6 +84,14 @@ void MpiExecutor::create_sub_executors(
 }
 
 
+MpiExecutor::request_manager<MPI_Request> MpiExecutor::create_requests_array(
+    int size)
+{
+    return MpiExecutor::request_manager<MPI_Request>{
+        new MPI_Request[size], [size](MPI_Request *req) { delete req; }};
+}
+
+
 void MpiExecutor::synchronize_communicator(MPI_Comm &comm) const
 {
     GKO_ASSERT_NO_MPI_ERRORS(MPI_Barrier(comm));
@@ -114,21 +122,43 @@ int MpiExecutor::get_num_ranks() const
 
 template <typename SendType>
 void MpiExecutor::send(const SendType *send_buffer, const int send_count,
-                       const int destination_rank, const int send_tag)
+                       const int destination_rank, const int send_tag,
+                       bool non_blocking)
 {
     auto send_type = helpers::mpi::get_mpi_type(send_buffer[0]);
-    bindings::mpi::send(send_buffer, send_count, send_type, destination_rank,
-                        send_tag, this->mpi_comm_);
+    if (!non_blocking) {
+        bindings::mpi::send(send_buffer, send_count, send_type,
+                            destination_rank, send_tag, this->mpi_comm_);
+    } else {
+        bindings::mpi::i_send(send_buffer, send_count, send_type,
+                              destination_rank, send_tag, this->mpi_comm_,
+                              nullptr);
+    }
 }
 
 
 template <typename RecvType>
 void MpiExecutor::recv(RecvType *recv_buffer, const int recv_count,
-                       const int source_rank, const int recv_tag)
+                       const int source_rank, const int recv_tag,
+                       bool non_blocking)
 {
     auto recv_type = helpers::mpi::get_mpi_type(recv_buffer[0]);
-    bindings::mpi::recv(recv_buffer, recv_count, recv_type, source_rank,
-                        recv_tag, this->mpi_comm_, this->mpi_status_.get());
+    if (!non_blocking) {
+        bindings::mpi::recv(recv_buffer, recv_count, recv_type, source_rank,
+                            recv_tag, this->mpi_comm_, this->mpi_status_.get());
+    } else {
+        bindings::mpi::i_recv(recv_buffer, recv_count, recv_type, source_rank,
+                              recv_tag, this->mpi_comm_, nullptr);
+    }
+}
+
+
+template <typename BroadcastType>
+void MpiExecutor::broadcast(BroadcastType *buffer, int count, int root_rank)
+{
+    auto bcast_type = helpers::mpi::get_mpi_type(buffer[0]);
+    bindings::mpi::broadcast(buffer, count, bcast_type, root_rank,
+                             this->mpi_comm_);
 }
 
 
@@ -230,56 +260,60 @@ MPI_Comm MpiExecutor::create_communicator(MPI_Comm &comm_in, int color, int key)
 }
 
 
-#define GKO_DECLARE_ARRAY_SEND(SendType)                                      \
+#define GKO_DECLARE_SEND(SendType)                                            \
     void MpiExecutor::send(const SendType *send_buffer, const int send_count, \
-                           const int destination_rank, const int send_tag)
+                           const int destination_rank, const int send_tag,    \
+                           bool non_blocking)
 
-GKO_INSTANTIATE_FOR_EACH_SEPARATE_VALUE_AND_INDEX_TYPE(GKO_DECLARE_ARRAY_SEND)
+GKO_INSTANTIATE_FOR_EACH_SEPARATE_VALUE_AND_INDEX_TYPE(GKO_DECLARE_SEND)
 
 
-#define GKO_DECLARE_ARRAY_RECV(RecvType)                                \
+#define GKO_DECLARE_RECV(RecvType)                                      \
     void MpiExecutor::recv(RecvType *recv_buffer, const int recv_count, \
-                           const int source_rank, const int recv_tag)
+                           const int source_rank, const int recv_tag,   \
+                           bool non_blocking)
 
-GKO_INSTANTIATE_FOR_EACH_SEPARATE_VALUE_AND_INDEX_TYPE(GKO_DECLARE_ARRAY_RECV)
+GKO_INSTANTIATE_FOR_EACH_SEPARATE_VALUE_AND_INDEX_TYPE(GKO_DECLARE_RECV)
 
 
-#define GKO_DECLARE_ARRAY_GATHER1(SendType, RecvType)                     \
+#define GKO_DECLARE_BCAST(BroadcastType) \
+    void MpiExecutor::broadcast(BroadcastType *buffer, int count, int root_rank)
+
+GKO_INSTANTIATE_FOR_EACH_SEPARATE_VALUE_AND_INDEX_TYPE(GKO_DECLARE_BCAST)
+
+
+#define GKO_DECLARE_GATHER1(SendType, RecvType)                           \
     void MpiExecutor::gather(const SendType *send_buffer,                 \
                              const int send_count, RecvType *recv_buffer, \
                              const int recv_count, int root_rank)
 
-GKO_INSTANTIATE_FOR_EACH_COMBINED_VALUE_AND_INDEX_TYPE(
-    GKO_DECLARE_ARRAY_GATHER1)
+GKO_INSTANTIATE_FOR_EACH_COMBINED_VALUE_AND_INDEX_TYPE(GKO_DECLARE_GATHER1)
 
 
-#define GKO_DECLARE_ARRAY_GATHER2(SendType, RecvType)                          \
+#define GKO_DECLARE_GATHER2(SendType, RecvType)                                \
     void MpiExecutor::gather(const SendType *send_buffer,                      \
                              const int send_count, RecvType *recv_buffer,      \
                              const int *recv_counts, const int *displacements, \
                              int root_rank)
 
-GKO_INSTANTIATE_FOR_EACH_COMBINED_VALUE_AND_INDEX_TYPE(
-    GKO_DECLARE_ARRAY_GATHER2)
+GKO_INSTANTIATE_FOR_EACH_COMBINED_VALUE_AND_INDEX_TYPE(GKO_DECLARE_GATHER2)
 
 
-#define GKO_DECLARE_ARRAY_SCATTER1(SendType, RecvType)                     \
+#define GKO_DECLARE_SCATTER1(SendType, RecvType)                           \
     void MpiExecutor::scatter(const SendType *send_buffer,                 \
                               const int send_count, RecvType *recv_buffer, \
                               const int recv_count, int root_rank)
 
-GKO_INSTANTIATE_FOR_EACH_COMBINED_VALUE_AND_INDEX_TYPE(
-    GKO_DECLARE_ARRAY_SCATTER1)
+GKO_INSTANTIATE_FOR_EACH_COMBINED_VALUE_AND_INDEX_TYPE(GKO_DECLARE_SCATTER1)
 
 
-#define GKO_DECLARE_ARRAY_SCATTER2(SendType, RecvType)                         \
+#define GKO_DECLARE_SCATTER2(SendType, RecvType)                               \
     void MpiExecutor::scatter(const SendType *send_buffer,                     \
                               const int *send_counts,                          \
                               const int *displacements, RecvType *recv_buffer, \
                               const int recv_count, int root_rank)
 
-GKO_INSTANTIATE_FOR_EACH_COMBINED_VALUE_AND_INDEX_TYPE(
-    GKO_DECLARE_ARRAY_SCATTER2)
+GKO_INSTANTIATE_FOR_EACH_COMBINED_VALUE_AND_INDEX_TYPE(GKO_DECLARE_SCATTER2)
 
 
 }  // namespace gko
