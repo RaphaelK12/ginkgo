@@ -302,6 +302,7 @@ TYPED_TEST(DistributedDense, CanDistributeDataNonContiguously)
 
 TYPED_TEST(DistributedDense, AppliesToDense)
 {
+    using Mtx = typename TestFixture::Mtx;
     using value_type = typename TestFixture::value_type;
     gko::IndexSet<gko::int32> index_set{10};
     gko::dim<2> local_size{};
@@ -349,6 +350,126 @@ TYPED_TEST(DistributedDense, AppliesToDense)
         delete data;
     }
     delete comp_data;
+}
+
+
+TYPED_TEST(DistributedDense, ScalesDense)
+{
+    using Mtx = typename TestFixture::Mtx;
+    using value_type = typename TestFixture::value_type;
+    gko::IndexSet<gko::int32> index_set{10};
+    gko::dim<2> local_size{};
+    gko::dim<2> res_size{};
+    std::shared_ptr<Mtx> comp_res;
+    auto alpha = gko::initialize<Mtx>({I<value_type>{2.0, -2.0}},
+                                      this->mpi_exec->get_sub_executor());
+    value_type *data;
+    value_type *comp_data;
+    if (this->rank == 0) {
+        // clang-format off
+        data = new value_type[10]{ 1.0, 2.0,
+                                  -1.0, 2.0,
+                                   3.0, 4.0,
+                                  -1.0, 3.0,
+                                   3.0, 4.0};
+        comp_data = new value_type[4]{ 2.0, -4.0,
+                                        -2.0, -4.0};
+        // clang-format on
+        index_set.add_subset(0, 4);
+        local_size = gko::dim<2>(2, 2);
+        res_size = gko::dim<2>(2, 2);
+        comp_res = gko::matrix::Dense<value_type>::create(
+            this->mpi_exec->get_sub_executor(), res_size,
+            gko::Array<value_type>::view(this->sub_exec, 4, comp_data), 2);
+    } else {
+        // clang-format off
+        comp_data = new value_type[6]{6.0, -8.0,
+                                      -2.0, -6.0,
+                                      6, -8.0};
+        // clang-format on
+        index_set.add_subset(4, 10);
+        local_size = gko::dim<2>(3, 2);
+        res_size = gko::dim<2>(3, 2);
+        comp_res = gko::matrix::Dense<value_type>::create(
+            this->mpi_exec->get_sub_executor(), res_size,
+            gko::Array<value_type>::view(this->sub_exec, 6, comp_data), 2);
+    }
+    auto mat = gko::matrix::Dense<value_type>::create_and_distribute(
+        this->mpi_exec, index_set, local_size,
+        gko::Array<value_type>::view(this->sub_exec, 10, data), 2);
+    mat->scale(alpha.get());
+    this->assert_equal_mtxs(mat.get(), comp_res.get());
+    if (this->rank == 0) {
+        delete data;
+    }
+    delete comp_data;
+}
+
+
+TYPED_TEST(DistributedDense, AddsScaled)
+{
+    using Mtx = typename TestFixture::Mtx;
+    using value_type = typename TestFixture::value_type;
+    gko::IndexSet<gko::int32> index_set{10};
+    gko::dim<2> local_size{};
+    gko::dim<2> res_size{};
+    std::shared_ptr<Mtx> comp_res;
+    std::shared_ptr<Mtx> b;
+    auto alpha = gko::initialize<Mtx>({I<value_type>{2.0, -2.0}},
+                                      this->mpi_exec->get_sub_executor());
+    value_type *data;
+    value_type *b_data;
+    value_type *comp_data;
+    if (this->rank == 0) {
+        // clang-format off
+        data = new value_type[10]{ 1.0, 2.0,
+                                  -1.0, 2.0,
+                                   3.0, 4.0,
+                                  -1.0, 3.0,
+                                   3.0, 4.0};
+        b_data = new value_type[4]{ 1.0, -2.0,
+                                    0.0, -3.0};
+        comp_data = new value_type[4]{ 3.0, 6.0,
+                                      -1.0, 8.0};
+        // clang-format on
+        index_set.add_subset(0, 4);
+        local_size = gko::dim<2>(2, 2);
+        res_size = gko::dim<2>(2, 2);
+        comp_res = gko::matrix::Dense<value_type>::create(
+            this->mpi_exec->get_sub_executor(), res_size,
+            gko::Array<value_type>::view(this->sub_exec, 4, comp_data), 2);
+        b = gko::matrix::Dense<value_type>::create(
+            this->mpi_exec->get_sub_executor(), res_size,
+            gko::Array<value_type>::view(this->sub_exec, 4, b_data), 2);
+    } else {
+        // clang-format off
+        b_data = new value_type[6]{ 1.0, -2.0,
+                                    0.0, 3.0,
+                                    0.5, -3.0};
+        comp_data = new value_type[6]{5.0, 8.0,
+                                     -1.0, -3.0,
+                                      4.0, 10.0};
+        // clang-format on
+        index_set.add_subset(4, 10);
+        local_size = gko::dim<2>(3, 2);
+        res_size = gko::dim<2>(3, 2);
+        comp_res = gko::matrix::Dense<value_type>::create(
+            this->mpi_exec->get_sub_executor(), res_size,
+            gko::Array<value_type>::view(this->sub_exec, 6, comp_data), 2);
+        b = gko::matrix::Dense<value_type>::create(
+            this->mpi_exec->get_sub_executor(), res_size,
+            gko::Array<value_type>::view(this->sub_exec, 6, b_data), 2);
+    }
+    auto mat = gko::matrix::Dense<value_type>::create_and_distribute(
+        this->mpi_exec, index_set, local_size,
+        gko::Array<value_type>::view(this->sub_exec, 10, data), 2);
+    mat->add_scaled(alpha.get(), b.get());
+    this->assert_equal_mtxs(mat.get(), comp_res.get());
+    if (this->rank == 0) {
+        delete data;
+    }
+    delete comp_data;
+    delete b_data;
 }
 
 
