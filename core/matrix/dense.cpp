@@ -271,9 +271,20 @@ void Dense<ValueType>::compute_dot_impl(const LinOp *b, LinOp *result) const
 {
     GKO_ASSERT_EQUAL_DIMENSIONS(this, b);
     GKO_ASSERT_EQUAL_DIMENSIONS(result, dim<2>(1, this->get_size()[1]));
-    auto exec = this->get_executor()->get_sub_executor();
-    exec->run(dense::make_compute_dot(this, as<Dense<ValueType>>(b),
-                                      as<Dense<ValueType>>(result)));
+    auto exec = this->get_executor();
+    auto dense_vec = as<Dense<ValueType>>(this);
+    auto dense_result = as<Dense<ValueType>>(result);
+    auto dense_b = as<Dense<ValueType>>(b);
+    exec->get_sub_executor()->run(
+        dense::make_compute_dot(dense_vec, dense_b, dense_result));
+    if (dynamic_cast<const gko::MpiExecutor *>(exec.get())) {
+        auto mpi_exec = const_cast<gko::MpiExecutor *>(
+            dynamic_cast<const gko::MpiExecutor *>(exec.get()));
+        for (auto i = 0; i < this->get_size()[1]; ++i) {
+            mpi_exec->all_reduce<ValueType>(&dense_result->get_values()[i],
+                                            &dense_result->get_values()[i], 1);
+        }
+    }
 }
 
 
@@ -281,10 +292,29 @@ template <typename ValueType>
 void Dense<ValueType>::compute_norm2_impl(LinOp *result) const
 {
     using NormVector = Dense<remove_complex<ValueType>>;
+    using DenseVec = Dense<ValueType>;
     GKO_ASSERT_EQUAL_DIMENSIONS(result, dim<2>(1, this->get_size()[1]));
-    auto exec = this->get_executor()->get_sub_executor();
-    exec->run(dense::make_compute_norm2(as<Dense<ValueType>>(this),
-                                        as<NormVector>(result)));
+    auto exec = this->get_executor();
+    auto sub_exec = exec->get_sub_executor();
+    auto norm = as<NormVector>(result);
+    if (dynamic_cast<const gko::MpiExecutor *>(exec.get())) {
+        auto tmp_norm = DenseVec::create(sub_exec, result->get_size());
+        sub_exec->run(dense::make_compute_dot(as<Dense<ValueType>>(this),
+                                              as<Dense<ValueType>>(this),
+                                              tmp_norm.get()));
+        auto mpi_exec = const_cast<gko::MpiExecutor *>(
+            dynamic_cast<const gko::MpiExecutor *>(exec.get()));
+        for (auto i = 0; i < this->get_size()[1]; ++i) {
+            mpi_exec->all_reduce<ValueType>(&tmp_norm->get_values()[i],
+                                            &tmp_norm->get_values()[i], 1);
+            // HACK!
+            auto val = real(tmp_norm->get_values()[i]);
+            sub_exec->copy(1, &val, &norm->get_values()[i]);
+        }
+    } else {
+        sub_exec->run(
+            dense::make_compute_norm2(as<Dense<ValueType>>(this), norm));
+    }
 }
 
 

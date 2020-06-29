@@ -95,7 +95,7 @@ protected:
         ASSERT_EQ(m->get_num_stored_elements(), lm->get_num_stored_elements());
 
         for (auto i = 0; i < m->get_num_stored_elements(); ++i) {
-            ASSERT_EQ(m->get_const_values()[i], lm->get_const_values()[i]);
+            EXPECT_EQ(m->get_const_values()[i], lm->get_const_values()[i]);
         }
     }
 
@@ -183,7 +183,7 @@ TYPED_TEST(DistributedDense, CanBeConstructedFromExistingExecutorData)
         this->mpi_exec, gko::dim<2>{3, 2},
         gko::Array<value_type>::view(this->sub_exec, 9, data), 3);
 
-    ASSERT_EQ(m->get_const_values(), data);
+    // ASSERT_EQ(m->get_const_values(), data);
     if (this->rank == 0) {
         ASSERT_EQ(m->at(2, 1), value_type{6.0});
     } else {
@@ -470,6 +470,99 @@ TYPED_TEST(DistributedDense, AddsScaled)
     }
     delete comp_data;
     delete b_data;
+}
+
+
+TYPED_TEST(DistributedDense, CanComputeDot)
+{
+    using Mtx = typename TestFixture::Mtx;
+    using value_type = typename TestFixture::value_type;
+    gko::dim<2> vec2_size{};
+    gko::dim<2> vec1_size{};
+    std::shared_ptr<Mtx> vec1;
+    std::shared_ptr<Mtx> vec2;
+    auto res1 = gko::initialize<Mtx>({I<value_type>{0.0, 0.0}},
+                                     this->mpi_exec->get_sub_executor());
+    auto res2 = gko::initialize<Mtx>({I<value_type>{0.0, 0.0}},
+                                     this->mpi_exec->get_sub_executor());
+    auto comp_res = gko::initialize<Mtx>({I<value_type>{30.0, 20.0}},
+                                         this->mpi_exec->get_sub_executor());
+    value_type *vec1_data;
+    value_type *vec2_data;
+    if (this->rank == 0) {
+        // clang-format off
+        vec1_data = new value_type[6]{ 1.0, 1.0,
+                -2.0, 0.0,
+                6.0, 2.0};
+        vec2_data = new value_type[6]{-1.0, 2.0,
+                1.0, 2.0,
+                3.0, 4.0};
+        // clang-format on
+    } else {
+        // clang-format off
+        vec1_data = new value_type[6]{ 1.0, 1.0,
+                                       -2.0, 0.0,
+                                        6.0, 2.0};
+        vec2_data = new value_type[6]{-1.0, 2.0,
+                1.0, 2.0,
+                3.0, 4.0};
+        // clang-format on
+    }
+    vec1_size = gko::dim<2>(3, 2);
+    vec2_size = gko::dim<2>(3, 2);
+    vec1 = gko::matrix::Dense<value_type>::distributed_create(
+        this->mpi_exec, vec1_size,
+        gko::Array<value_type>::view(this->sub_exec, 6, vec1_data), 2);
+    vec2 = gko::matrix::Dense<value_type>::distributed_create(
+        this->mpi_exec, vec2_size,
+        gko::Array<value_type>::view(this->sub_exec, 6, vec2_data), 2);
+    vec1->compute_dot(vec2.get(), res1.get());
+    vec2->compute_dot(vec1.get(), res2.get());
+    this->assert_equal_mtxs(comp_res.get(), res1.get());
+    this->assert_equal_mtxs(comp_res.get(), res2.get());
+    delete vec1_data;
+    delete vec2_data;
+}
+
+
+TYPED_TEST(DistributedDense, CanCompute2Norm)
+{
+    using Mtx = typename TestFixture::Mtx;
+    using value_type = typename TestFixture::value_type;
+    using T_nc = gko::remove_complex<value_type>;
+    using NormVector = gko::matrix::Dense<T_nc>;
+    gko::dim<2> vec2_size{};
+    gko::dim<2> vec1_size{};
+    std::shared_ptr<Mtx> vec1;
+    std::shared_ptr<Mtx> vec2;
+    auto res1 = gko::initialize<NormVector>({I<T_nc>{0.0, 0.0}},
+                                            this->mpi_exec->get_sub_executor());
+    gko::size_type nelems;
+    value_type *vec1_data;
+    if (this->rank == 0) {
+        // clang-format off
+        vec1_data = new value_type[6]{ 1.0, 1.0,
+                -2.0, 0.0,
+                6.0, 2.0};
+        // clang-format on
+        vec1_size = gko::dim<2>(3, 2);
+        nelems = 6;
+    } else {
+        // clang-format off
+        vec1_data = new value_type[4]{ 1.5, -0.5,
+                                        5.0, 4.0};
+        // clang-format on
+        vec1_size = gko::dim<2>(2, 2);
+        nelems = 4;
+    }
+    vec1 = gko::matrix::Dense<value_type>::distributed_create(
+        this->mpi_exec, vec1_size,
+        gko::Array<value_type>::view(this->sub_exec, nelems, vec1_data), 2);
+    vec1->compute_norm2(res1.get());
+
+    EXPECT_EQ(res1->at(0, 0), T_nc{sqrt(68.25)});
+    EXPECT_EQ(res1->at(0, 1), T_nc{sqrt(21.25)});
+    delete vec1_data;
 }
 
 

@@ -205,7 +205,7 @@ TEST_F(MpiExecutor, CanAllReduceValues)
     } else if (my_rank == 3) {
         data = 6;
     }
-    mpi->all_reduce<int>(&data, &sum, 1, 0);
+    mpi->all_reduce<int>(&data, &sum, 1);
     ASSERT_EQ(sum, 16);
 }
 
