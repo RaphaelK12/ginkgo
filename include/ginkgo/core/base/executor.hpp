@@ -943,6 +943,16 @@ public:
     template <typename BroadcastType>
     void broadcast(BroadcastType *buffer, int count, int root_rank);
 
+    // MPI_Reduce
+    template <typename ReduceType>
+    void reduce(const ReduceType *send_buffer, ReduceType *recv_buffer,
+                int count, int root_rank, bool non_blocking = false);
+
+    // MPI_Allreduce
+    template <typename ReduceType>
+    void all_reduce(const ReduceType *send_buffer, ReduceType *recv_buffer,
+                    int count, bool non_blocking = false);
+
 protected:
     MpiExecutor() = delete;
 

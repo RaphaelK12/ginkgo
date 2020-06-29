@@ -162,6 +162,38 @@ void MpiExecutor::broadcast(BroadcastType *buffer, int count, int root_rank)
 }
 
 
+template <typename ReduceType>
+void MpiExecutor::reduce(const ReduceType *send_buffer, ReduceType *recv_buffer,
+                         int count, int root_rank, bool non_blocking)
+{
+    auto reduce_type = helpers::mpi::get_mpi_type(send_buffer[0]);
+    if (!non_blocking) {
+        bindings::mpi::reduce(send_buffer, recv_buffer, count, reduce_type,
+                              MPI_SUM, root_rank, this->mpi_comm_);
+    } else {
+        bindings::mpi::i_reduce(send_buffer, recv_buffer, count, reduce_type,
+                                MPI_SUM, root_rank, this->mpi_comm_, nullptr);
+    }
+}
+
+
+template <typename ReduceType>
+void MpiExecutor::all_reduce(const ReduceType *send_buffer,
+                             ReduceType *recv_buffer, int count,
+                             bool non_blocking)
+{
+    auto reduce_type = helpers::mpi::get_mpi_type(send_buffer[0]);
+    if (!non_blocking) {
+        bindings::mpi::all_reduce(send_buffer, recv_buffer, count, reduce_type,
+                                  MPI_SUM, this->mpi_comm_);
+    } else {
+        bindings::mpi::i_all_reduce(send_buffer, recv_buffer, count,
+                                    reduce_type, MPI_SUM, this->mpi_comm_,
+                                    nullptr);
+    }
+}
+
+
 template <typename SendType, typename RecvType>
 void MpiExecutor::gather(const SendType *send_buffer, const int send_count,
                          RecvType *recv_buffer, const int recv_count,
@@ -280,6 +312,22 @@ GKO_INSTANTIATE_FOR_EACH_SEPARATE_VALUE_AND_INDEX_TYPE(GKO_DECLARE_RECV)
     void MpiExecutor::broadcast(BroadcastType *buffer, int count, int root_rank)
 
 GKO_INSTANTIATE_FOR_EACH_SEPARATE_VALUE_AND_INDEX_TYPE(GKO_DECLARE_BCAST)
+
+
+#define GKO_DECLARE_REDUCE(ReduceType)                           \
+    void MpiExecutor::reduce(const ReduceType *send_buffer,      \
+                             ReduceType *recv_buffer, int count, \
+                             int root_rank, bool non_blocking)
+
+GKO_INSTANTIATE_FOR_EACH_SEPARATE_VALUE_AND_INDEX_TYPE(GKO_DECLARE_REDUCE)
+
+
+#define GKO_DECLARE_ALLREDUCE(ReduceType)                            \
+    void MpiExecutor::all_reduce(const ReduceType *send_buffer,      \
+                                 ReduceType *recv_buffer, int count, \
+                                 bool non_blocking)
+
+GKO_INSTANTIATE_FOR_EACH_SEPARATE_VALUE_AND_INDEX_TYPE(GKO_DECLARE_ALLREDUCE)
 
 
 #define GKO_DECLARE_GATHER1(SendType, RecvType)                           \

@@ -139,6 +139,77 @@ TEST_F(MpiExecutor, CanSendAndRecvValues)
 }
 
 
+TEST_F(MpiExecutor, CanBroadcastValues)
+{
+    auto sub_exec = mpi->get_sub_executor();
+    auto my_rank = mpi->get_my_rank();
+    double *data;
+    auto array = gko::Array<double>{sub_exec, 8};
+    if (my_rank == 0) {
+        // clang-format off
+        data = new double[8]{ 2.0, 3.0, 1.0,
+                3.0,-1.0, 0.0 , 3.5, 1.5};
+        // clang-format on
+        array = gko::Array<double>{gko::Array<double>::view(sub_exec, 8, data)};
+    }
+    mpi->broadcast<double>(array.get_data(), 8, 0);
+    auto comp_data = array.get_data();
+    ASSERT_EQ(comp_data[0], 2.0);
+    ASSERT_EQ(comp_data[1], 3.0);
+    ASSERT_EQ(comp_data[2], 1.0);
+    ASSERT_EQ(comp_data[3], 3.0);
+    ASSERT_EQ(comp_data[4], -1.0);
+    ASSERT_EQ(comp_data[5], 0.0);
+    ASSERT_EQ(comp_data[6], 3.5);
+    ASSERT_EQ(comp_data[7], 1.5);
+    if (my_rank == 0) {
+        delete data;
+    }
+}
+
+
+TEST_F(MpiExecutor, CanReduceValues)
+{
+    auto sub_exec = mpi->get_sub_executor();
+    auto my_rank = mpi->get_my_rank();
+    auto num_ranks = mpi->get_num_ranks();
+    int data, sum;
+    if (my_rank == 0) {
+        data = 3;
+    } else if (my_rank == 1) {
+        data = 5;
+    } else if (my_rank == 2) {
+        data = 2;
+    } else if (my_rank == 3) {
+        data = 6;
+    }
+    mpi->reduce<int>(&data, &sum, 1, 0);
+    if (my_rank == 0) {
+        ASSERT_EQ(sum, 16);
+    }
+}
+
+
+TEST_F(MpiExecutor, CanAllReduceValues)
+{
+    auto sub_exec = mpi->get_sub_executor();
+    auto my_rank = mpi->get_my_rank();
+    auto num_ranks = mpi->get_num_ranks();
+    int data, sum;
+    if (my_rank == 0) {
+        data = 3;
+    } else if (my_rank == 1) {
+        data = 5;
+    } else if (my_rank == 2) {
+        data = 2;
+    } else if (my_rank == 3) {
+        data = 6;
+    }
+    mpi->all_reduce<int>(&data, &sum, 1, 0);
+    ASSERT_EQ(sum, 16);
+}
+
+
 TEST_F(MpiExecutor, CanScatterValues)
 {
     auto sub_exec = mpi->get_sub_executor();

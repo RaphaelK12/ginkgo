@@ -271,7 +271,7 @@ void Dense<ValueType>::compute_dot_impl(const LinOp *b, LinOp *result) const
 {
     GKO_ASSERT_EQUAL_DIMENSIONS(this, b);
     GKO_ASSERT_EQUAL_DIMENSIONS(result, dim<2>(1, this->get_size()[1]));
-    auto exec = this->get_executor();
+    auto exec = this->get_executor()->get_sub_executor();
     exec->run(dense::make_compute_dot(this, as<Dense<ValueType>>(b),
                                       as<Dense<ValueType>>(result)));
 }
@@ -282,7 +282,7 @@ void Dense<ValueType>::compute_norm2_impl(LinOp *result) const
 {
     using NormVector = Dense<remove_complex<ValueType>>;
     GKO_ASSERT_EQUAL_DIMENSIONS(result, dim<2>(1, this->get_size()[1]));
-    auto exec = this->get_executor();
+    auto exec = this->get_executor()->get_sub_executor();
     exec->run(dense::make_compute_norm2(as<Dense<ValueType>>(this),
                                         as<NormVector>(result)));
 }

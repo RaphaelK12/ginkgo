@@ -127,6 +127,45 @@ inline void broadcast(void *buffer, int count, MPI_Datatype &bcast_type,
 }
 
 
+inline void reduce(const void *send_buffer, void *recv_buffer, int count,
+                   MPI_Datatype &reduce_type, MPI_Op operation, int root_rank,
+                   MPI_Comm &comm)
+{
+    GKO_ASSERT_NO_MPI_ERRORS(MPI_Reduce(send_buffer, recv_buffer, count,
+                                        reduce_type, operation, root_rank,
+                                        comm));
+}
+
+
+inline void all_reduce(const void *send_buffer, void *recv_buffer, int count,
+                       MPI_Datatype &reduce_type, MPI_Op operation,
+                       MPI_Comm &comm)
+{
+    GKO_ASSERT_NO_MPI_ERRORS(MPI_Allreduce(send_buffer, recv_buffer, count,
+                                           reduce_type, operation, comm));
+}
+
+
+inline void i_reduce(const void *send_buffer, void *recv_buffer, int count,
+                     MPI_Datatype &reduce_type, MPI_Op operation, int root_rank,
+                     MPI_Comm &comm, MPI_Request *requests)
+{
+    GKO_ASSERT_NO_MPI_ERRORS(MPI_Ireduce(send_buffer, recv_buffer, count,
+                                         reduce_type, operation, root_rank,
+                                         comm, requests));
+}
+
+
+inline void i_all_reduce(const void *send_buffer, void *recv_buffer, int count,
+                         MPI_Datatype &reduce_type, MPI_Op operation,
+                         MPI_Comm &comm, MPI_Request *requests)
+{
+    GKO_ASSERT_NO_MPI_ERRORS(MPI_Iallreduce(send_buffer, recv_buffer, count,
+                                            reduce_type, operation, comm,
+                                            requests));
+}
+
+
 inline void gather(const void *send_buffer, const int send_count,
                    MPI_Datatype &send_type, void *recv_buffer,
                    const int recv_count, MPI_Datatype &recv_type, int root,
