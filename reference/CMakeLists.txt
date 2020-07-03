@@ -5,6 +5,7 @@ target_sources(ginkgo_reference
     components/fill_array.cpp
     components/precision_conversion.cpp
     components/prefix_sum.cpp
+    components/sqrt_array.cpp
     factorization/ilu_kernels.cpp
     factorization/factorization_kernels.cpp
     factorization/par_ict_kernels.cpp

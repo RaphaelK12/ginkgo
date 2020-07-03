@@ -494,6 +494,12 @@ public:
     Array distribute_data(std::shared_ptr<gko::Executor> exec,
                           const IndexSet<IndexType> &index_set);
 
+    /**
+     * Computes the sqrt of each element in the array.
+     */
+    template <typename ReturnType>
+    void sqrt(Array<ReturnType> &sqrt_array);
+
 
     /**
      * Deallocates all data used by the Array.

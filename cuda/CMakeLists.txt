@@ -74,6 +74,7 @@ target_sources(ginkgo_cuda
     components/fill_array.cu
     components/precision_conversion.cu
     components/prefix_sum.cu
+    components/sqrt_array.cu
     factorization/ilu_kernels.cu
     factorization/factorization_kernels.cu
     factorization/par_ict_kernels.cu

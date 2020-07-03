@@ -37,6 +37,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
 #include "core/components/precision_conversion.hpp"
+#include "core/components/sqrt_array.hpp"
 
 
 namespace gko {
@@ -47,6 +48,15 @@ GKO_REGISTER_OPERATION(convert, components::convert_precision);
 
 
 }  // namespace conversion
+
+
+namespace utils {
+
+
+GKO_REGISTER_OPERATION(sqrt, components::sqrt_array);
+
+
+}  // namespace utils
 
 
 namespace detail {
@@ -68,6 +78,23 @@ GKO_INSTANTIATE_FOR_EACH_VALUE_CONVERSION(GKO_DECLARE_ARRAY_CONVERSION);
 
 
 }  // namespace detail
+
+
+template <typename SourceType>
+template <typename TargetType>
+void Array<SourceType>::sqrt(Array<TargetType> &sqrt_array)
+{
+    auto size = this->get_num_elems();
+    this->get_executor()->run(
+        utils::make_sqrt(size, this->get_const_data(), sqrt_array.get_data()));
+}
+
+
+#define GKO_DECLARE_ARRAY_SQRT(SourceType, TargetType) \
+    void Array<SourceType>::sqrt(Array<TargetType> &sqrt_array)
+
+GKO_INSTANTIATE_FOR_EACH_VALUE_TYPE_PAIR(GKO_DECLARE_ARRAY_SQRT);
+
 
 template <typename ValueType>
 template <typename IndexType>

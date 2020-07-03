@@ -147,6 +147,7 @@ set(GINKGO_HIP_SOURCES
     components/fill_array.hip.cpp
     components/precision_conversion.hip.cpp
     components/prefix_sum.hip.cpp
+    components/sqrt_array.cpp
     factorization/ilu_kernels.hip.cpp
     factorization/factorization_kernels.hip.cpp
     factorization/par_ict_kernels.hip.cpp
