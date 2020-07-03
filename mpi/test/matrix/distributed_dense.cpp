@@ -183,7 +183,7 @@ TYPED_TEST(DistributedDense, CanBeConstructedFromExistingExecutorData)
         this->mpi_exec, gko::dim<2>{3, 2},
         gko::Array<value_type>::view(this->sub_exec, 9, data), 3);
 
-    // ASSERT_EQ(m->get_const_values(), data);
+    ASSERT_EQ(m->get_const_values(), data);
     if (this->rank == 0) {
         ASSERT_EQ(m->at(2, 1), value_type{6.0});
     } else {

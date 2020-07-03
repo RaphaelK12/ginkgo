@@ -425,7 +425,7 @@ public:
             this->clear();
             return *this;
         }
-        if (exec_ == other.get_executor()) {
+        if ((exec_->get_mem_space() == other.get_executor()->get_mem_space())) {
             // same device, only move the pointer
             using std::swap;
             swap(data_, other.data_);
@@ -477,8 +477,9 @@ public:
         }
         Array<OtherValueType> tmp{this->exec_};
         const OtherValueType *source = other.get_const_data();
-        // if we are on different executors: copy, then convert
-        if (this->exec_ != other.get_executor()) {
+        // if we are on different memory spaces: copy, then convert
+        if (this->exec_->get_mem_space() !=
+            other.get_executor()->get_mem_space()) {
             tmp = other;
             source = tmp.get_const_data();
         }

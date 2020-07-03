@@ -48,8 +48,6 @@ void sqrt_array(std::shared_ptr<const DefaultExecutor> exec, size_type size,
 {
     for (auto i = 0; i < size; ++i) {
         out[i] = sqrt(real(in[i]));
-        // } else {
-        //     out[i] = sqrt(in[i]);
     }
 }
 

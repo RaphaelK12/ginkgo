@@ -314,7 +314,7 @@ MPI_Comm MpiExecutor::create_communicator(MPI_Comm &comm_in, int color, int key)
                            const int destination_rank, const int send_tag,    \
                            bool non_blocking)
 
-GKO_INSTANTIATE_FOR_EACH_SEPARATE_VALUE_AND_INDEX_TYPE(GKO_DECLARE_SEND)
+GKO_INSTANTIATE_FOR_EACH_SEPARATE_VALUE_AND_INDEX_TYPE(GKO_DECLARE_SEND);
 
 
 #define GKO_DECLARE_RECV(RecvType)                                      \
@@ -322,13 +322,13 @@ GKO_INSTANTIATE_FOR_EACH_SEPARATE_VALUE_AND_INDEX_TYPE(GKO_DECLARE_SEND)
                            const int source_rank, const int recv_tag,   \
                            bool non_blocking)
 
-GKO_INSTANTIATE_FOR_EACH_SEPARATE_VALUE_AND_INDEX_TYPE(GKO_DECLARE_RECV)
+GKO_INSTANTIATE_FOR_EACH_SEPARATE_VALUE_AND_INDEX_TYPE(GKO_DECLARE_RECV);
 
 
 #define GKO_DECLARE_BCAST(BroadcastType) \
     void MpiExecutor::broadcast(BroadcastType *buffer, int count, int root_rank)
 
-GKO_INSTANTIATE_FOR_EACH_SEPARATE_VALUE_AND_INDEX_TYPE(GKO_DECLARE_BCAST)
+GKO_INSTANTIATE_FOR_EACH_SEPARATE_VALUE_AND_INDEX_TYPE(GKO_DECLARE_BCAST);
 
 
 #define GKO_DECLARE_REDUCE(ReduceType)                                     \
@@ -336,7 +336,7 @@ GKO_INSTANTIATE_FOR_EACH_SEPARATE_VALUE_AND_INDEX_TYPE(GKO_DECLARE_BCAST)
         const ReduceType *send_buffer, ReduceType *recv_buffer, int count, \
         mpi::op_type operation, int root_rank, bool non_blocking)
 
-GKO_INSTANTIATE_FOR_EACH_SEPARATE_VALUE_AND_INDEX_TYPE(GKO_DECLARE_REDUCE)
+GKO_INSTANTIATE_FOR_EACH_SEPARATE_VALUE_AND_INDEX_TYPE(GKO_DECLARE_REDUCE);
 
 
 #define GKO_DECLARE_ALLREDUCE(ReduceType)                            \
@@ -344,7 +344,7 @@ GKO_INSTANTIATE_FOR_EACH_SEPARATE_VALUE_AND_INDEX_TYPE(GKO_DECLARE_REDUCE)
                                  ReduceType *recv_buffer, int count, \
                                  mpi::op_type operation, bool non_blocking)
 
-GKO_INSTANTIATE_FOR_EACH_SEPARATE_VALUE_AND_INDEX_TYPE(GKO_DECLARE_ALLREDUCE)
+GKO_INSTANTIATE_FOR_EACH_SEPARATE_VALUE_AND_INDEX_TYPE(GKO_DECLARE_ALLREDUCE);
 
 
 #define GKO_DECLARE_GATHER1(SendType, RecvType)                           \
@@ -352,7 +352,7 @@ GKO_INSTANTIATE_FOR_EACH_SEPARATE_VALUE_AND_INDEX_TYPE(GKO_DECLARE_ALLREDUCE)
                              const int send_count, RecvType *recv_buffer, \
                              const int recv_count, int root_rank)
 
-GKO_INSTANTIATE_FOR_EACH_COMBINED_VALUE_AND_INDEX_TYPE(GKO_DECLARE_GATHER1)
+GKO_INSTANTIATE_FOR_EACH_COMBINED_VALUE_AND_INDEX_TYPE(GKO_DECLARE_GATHER1);
 
 
 #define GKO_DECLARE_GATHER2(SendType, RecvType)                                \
@@ -361,7 +361,7 @@ GKO_INSTANTIATE_FOR_EACH_COMBINED_VALUE_AND_INDEX_TYPE(GKO_DECLARE_GATHER1)
                              const int *recv_counts, const int *displacements, \
                              int root_rank)
 
-GKO_INSTANTIATE_FOR_EACH_COMBINED_VALUE_AND_INDEX_TYPE(GKO_DECLARE_GATHER2)
+GKO_INSTANTIATE_FOR_EACH_COMBINED_VALUE_AND_INDEX_TYPE(GKO_DECLARE_GATHER2);
 
 
 #define GKO_DECLARE_SCATTER1(SendType, RecvType)                           \
@@ -369,7 +369,7 @@ GKO_INSTANTIATE_FOR_EACH_COMBINED_VALUE_AND_INDEX_TYPE(GKO_DECLARE_GATHER2)
                               const int send_count, RecvType *recv_buffer, \
                               const int recv_count, int root_rank)
 
-GKO_INSTANTIATE_FOR_EACH_COMBINED_VALUE_AND_INDEX_TYPE(GKO_DECLARE_SCATTER1)
+GKO_INSTANTIATE_FOR_EACH_COMBINED_VALUE_AND_INDEX_TYPE(GKO_DECLARE_SCATTER1);
 
 
 #define GKO_DECLARE_SCATTER2(SendType, RecvType)                               \
@@ -378,7 +378,7 @@ GKO_INSTANTIATE_FOR_EACH_COMBINED_VALUE_AND_INDEX_TYPE(GKO_DECLARE_SCATTER1)
                               const int *displacements, RecvType *recv_buffer, \
                               const int recv_count, int root_rank)
 
-GKO_INSTANTIATE_FOR_EACH_COMBINED_VALUE_AND_INDEX_TYPE(GKO_DECLARE_SCATTER2)
+GKO_INSTANTIATE_FOR_EACH_COMBINED_VALUE_AND_INDEX_TYPE(GKO_DECLARE_SCATTER2);
 
 
 }  // namespace gko

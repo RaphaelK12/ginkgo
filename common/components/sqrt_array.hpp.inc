@@ -41,8 +41,6 @@ __global__ __launch_bounds__(default_block_size) void sqrt_array(
     const auto tidx = thread::get_thread_id_flat();
     if (tidx < n) {
         out[tidx] = sqrt(real(in[tidx]));
-        // } else {
-        //     out[tidx] = sqrt(in[tidx]);
     }
 
 

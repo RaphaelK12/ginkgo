@@ -497,7 +497,7 @@ GKO_ATTRIBUTES constexpr bool operator!=(precision_reduction x,
     template _macro(std::complex<float>);                              \
     template _macro(std::complex<double>);                             \
     template _macro(int32);                                            \
-    template _macro(int64);
+    template _macro(int64)
 
 
 /**
@@ -514,7 +514,7 @@ GKO_ATTRIBUTES constexpr bool operator!=(precision_reduction x,
     template _macro(std::complex<float>, float);               \
     template _macro(std::complex<double>, double);             \
     template _macro(std::complex<float>, std::complex<float>); \
-    template _macro(std::complex<double>, std::complex<double>);
+    template _macro(std::complex<double>, std::complex<double>)
 
 
 /**
@@ -535,7 +535,7 @@ GKO_ATTRIBUTES constexpr bool operator!=(precision_reduction x,
     template _macro(double, double);                                   \
     template _macro(long double, long double);                         \
     template _macro(std::complex<float>, std::complex<float>);         \
-    template _macro(std::complex<double>, std::complex<double>);
+    template _macro(std::complex<double>, std::complex<double>)
 
 /**
  * Instantiates a template for each value type conversion pair compiled by
