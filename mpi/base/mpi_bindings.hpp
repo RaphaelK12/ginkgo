@@ -206,6 +206,11 @@ inline void scatterv(const void *send_buffer, const int *send_counts,
                      recv_buffer, recv_count, recv_type, root_rank, comm));
 }
 
+inline void create_op(MPI_User_function *func, int commute, MPI_Op *op)
+{
+    GKO_ASSERT_NO_MPI_ERRORS(MPI_Op_create(func, commute, op));
+}
+
 
 }  // namespace mpi
 }  // namespace bindings

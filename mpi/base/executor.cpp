@@ -34,12 +34,14 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <iostream>
 #include <map>
 
+
 #include "mpi/base/mpi_bindings.hpp"
-#include "mpi/base/mpi_types.hpp"
 
 #include <ginkgo/config.hpp>
 #include <ginkgo/core/base/exception_helpers.hpp>
 #include <ginkgo/core/base/executor.hpp>
+
+#include "mpi/base/mpi_helpers.hpp"
 
 
 namespace gko {
@@ -104,6 +106,18 @@ void MpiExecutor::synchronize() const
 }
 
 
+// MPI_Op MpiExecutor::create_operation(
+//     std::function<void(void *, void *, int *, MPI_Datatype *)> func, void
+//     *arg1, void *arg2, int *len, MPI_Datatype *type)
+// {
+//     MPI_Op operation;
+//     bindings::mpi::create_op(
+//         func.target<void(void *, void *, int *, MPI_Datatype *)>(), true,
+//         &operation);
+//     return operation;
+// }
+
+
 int MpiExecutor::get_my_rank() const
 {
     auto my_rank = 0;
@@ -164,15 +178,17 @@ void MpiExecutor::broadcast(BroadcastType *buffer, int count, int root_rank)
 
 template <typename ReduceType>
 void MpiExecutor::reduce(const ReduceType *send_buffer, ReduceType *recv_buffer,
-                         int count, int root_rank, bool non_blocking)
+                         int count, mpi::op_type op_enum, int root_rank,
+                         bool non_blocking)
 {
+    auto operation = helpers::mpi::get_operation<ReduceType>(op_enum);
     auto reduce_type = helpers::mpi::get_mpi_type(send_buffer[0]);
     if (!non_blocking) {
         bindings::mpi::reduce(send_buffer, recv_buffer, count, reduce_type,
-                              MPI_SUM, root_rank, this->mpi_comm_);
+                              operation, root_rank, this->mpi_comm_);
     } else {
         bindings::mpi::i_reduce(send_buffer, recv_buffer, count, reduce_type,
-                                MPI_SUM, root_rank, this->mpi_comm_, nullptr);
+                                operation, root_rank, this->mpi_comm_, nullptr);
     }
 }
 
@@ -180,15 +196,16 @@ void MpiExecutor::reduce(const ReduceType *send_buffer, ReduceType *recv_buffer,
 template <typename ReduceType>
 void MpiExecutor::all_reduce(const ReduceType *send_buffer,
                              ReduceType *recv_buffer, int count,
-                             bool non_blocking)
+                             mpi::op_type op_enum, bool non_blocking)
 {
+    auto operation = helpers::mpi::get_operation<ReduceType>(op_enum);
     auto reduce_type = helpers::mpi::get_mpi_type(send_buffer[0]);
     if (!non_blocking) {
         bindings::mpi::all_reduce(send_buffer, recv_buffer, count, reduce_type,
-                                  MPI_SUM, this->mpi_comm_);
+                                  operation, this->mpi_comm_);
     } else {
         bindings::mpi::i_all_reduce(send_buffer, recv_buffer, count,
-                                    reduce_type, MPI_SUM, this->mpi_comm_,
+                                    reduce_type, operation, this->mpi_comm_,
                                     nullptr);
     }
 }
@@ -314,10 +331,10 @@ GKO_INSTANTIATE_FOR_EACH_SEPARATE_VALUE_AND_INDEX_TYPE(GKO_DECLARE_RECV)
 GKO_INSTANTIATE_FOR_EACH_SEPARATE_VALUE_AND_INDEX_TYPE(GKO_DECLARE_BCAST)
 
 
-#define GKO_DECLARE_REDUCE(ReduceType)                           \
-    void MpiExecutor::reduce(const ReduceType *send_buffer,      \
-                             ReduceType *recv_buffer, int count, \
-                             int root_rank, bool non_blocking)
+#define GKO_DECLARE_REDUCE(ReduceType)                                     \
+    void MpiExecutor::reduce(                                              \
+        const ReduceType *send_buffer, ReduceType *recv_buffer, int count, \
+        mpi::op_type operation, int root_rank, bool non_blocking)
 
 GKO_INSTANTIATE_FOR_EACH_SEPARATE_VALUE_AND_INDEX_TYPE(GKO_DECLARE_REDUCE)
 
@@ -325,7 +342,7 @@ GKO_INSTANTIATE_FOR_EACH_SEPARATE_VALUE_AND_INDEX_TYPE(GKO_DECLARE_REDUCE)
 #define GKO_DECLARE_ALLREDUCE(ReduceType)                            \
     void MpiExecutor::all_reduce(const ReduceType *send_buffer,      \
                                  ReduceType *recv_buffer, int count, \
-                                 bool non_blocking)
+                                 mpi::op_type operation, bool non_blocking)
 
 GKO_INSTANTIATE_FOR_EACH_SEPARATE_VALUE_AND_INDEX_TYPE(GKO_DECLARE_ALLREDUCE)
 

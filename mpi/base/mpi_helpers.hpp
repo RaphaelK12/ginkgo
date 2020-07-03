@@ -30,9 +30,10 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ******************************<GINKGO LICENSE>*******************************/
 
-#ifndef GKO_MPI_TYPES_HPP_
-#define GKO_MPI_TYPES_HPP_
+#ifndef GKO_MPI_HELPERS_HPP_
+#define GKO_MPI_HELPERS_HPP_
 
+#include <functional>
 
 #include <mpi.h>
 
@@ -41,9 +42,9 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace gko {
 /**
- * @brief The bindings namespace.
+ * @brief The helpers namespace.
  *
- * @ingroup bindings
+ * @ingroup helper
  */
 namespace helpers {
 /**
@@ -74,9 +75,90 @@ GKO_MPI_DATATYPE(std::complex<float>, MPI_COMPLEX);
 GKO_MPI_DATATYPE(std::complex<double>, MPI_DOUBLE_COMPLEX);
 
 
+namespace detail {
+namespace operations {
+
+template <typename ValueType>
+void custom(void *in, void *inout, int *size, MPI_Datatype *)
+{
+    auto l_in = reinterpret_cast<ValueType *>(in);
+    auto l_inout = reinterpret_cast<ValueType *>(inout);
+    ValueType sum = 0.0;
+    for (auto i = 0; i < *size; ++i) {
+    }
+    *l_inout = (*l_in);
+}
+
+
+}  // namespace operations
+}  // namespace detail
+
+
+template <typename ValueType>
+MPI_Op get_operation(gko::mpi::op_type op)
+{
+    switch (op) {
+    case gko::mpi::op_type::sum:
+        return MPI_SUM;
+        break;
+    case gko::mpi::op_type::min:
+        return MPI_MIN;
+        break;
+    case gko::mpi::op_type::max:
+        return MPI_MAX;
+        break;
+    case gko::mpi::op_type::product:
+        return MPI_PROD;
+        break;
+    case gko::mpi::op_type::custom: {
+        // TEMPLATE to create custom operations
+        MPI_Op op;
+        // auto op = std::unique_ptr<MPI_Op, std::function<void(T
+        // *)>>([](MPI_Op){}); GKO_ASSERT_NO_MPI_ERRORS(
+        //     MPI_Op_create(detail::operations::custom<ValueType>, true, &op));
+        return op;
+        break;
+    }
+    case gko::mpi::op_type::logical_and:
+        return MPI_LAND;
+        break;
+    case gko::mpi::op_type::bitwise_and:
+        return MPI_BAND;
+        break;
+    case gko::mpi::op_type::logical_or:
+        return MPI_LOR;
+        break;
+    case gko::mpi::op_type::bitwise_or:
+        return MPI_BOR;
+        break;
+    case gko::mpi::op_type::logical_xor:
+        return MPI_LXOR;
+        break;
+    case gko::mpi::op_type::bitwise_xor:
+        return MPI_BXOR;
+        break;
+    case gko::mpi::op_type::max_val_and_loc:
+        return MPI_MAXLOC;
+        break;
+    case gko::mpi::op_type::min_val_and_loc:
+        return MPI_MINLOC;
+        break;
+    default:
+        GKO_NOT_SUPPORTED(op);
+        break;
+    }
+}
+
+
+// #define GKO_DECLARE_MPI_GET_OP(ValueType) MPI_Op
+// get_operation(gko::mpi::op_type)
+
+// GKO_INSTANTIATE_FOR_EACH_SEPARATE_VALUE_AND_INDEX_TYPE(GKO_DECLARE_MPI_GET_OP);
+
+
 }  // namespace mpi
 }  // namespace helpers
 }  // namespace gko
 
 
-#endif  // GKO_MPI_BINDINGS_HPP_
+#endif  // GKO_MPI_HELPERS_HPP_

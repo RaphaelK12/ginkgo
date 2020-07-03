@@ -170,10 +170,11 @@ TEST_F(MpiExecutor, CanBroadcastValues)
 
 TEST_F(MpiExecutor, CanReduceValues)
 {
+    using ValueType = double;
     auto sub_exec = mpi->get_sub_executor();
     auto my_rank = mpi->get_my_rank();
     auto num_ranks = mpi->get_num_ranks();
-    int data, sum;
+    ValueType data, sum, max, min;
     if (my_rank == 0) {
         data = 3;
     } else if (my_rank == 1) {
@@ -183,9 +184,13 @@ TEST_F(MpiExecutor, CanReduceValues)
     } else if (my_rank == 3) {
         data = 6;
     }
-    mpi->reduce<int>(&data, &sum, 1, 0);
+    mpi->reduce<ValueType>(&data, &sum, 1, gko::mpi::op_type::sum, 0);
+    mpi->reduce<ValueType>(&data, &max, 1, gko::mpi::op_type::max, 0);
+    mpi->reduce<ValueType>(&data, &min, 1, gko::mpi::op_type::min, 0);
     if (my_rank == 0) {
-        ASSERT_EQ(sum, 16);
+        EXPECT_EQ(sum, 16.0);
+        EXPECT_EQ(max, 6.0);
+        EXPECT_EQ(min, 2.0);
     }
 }
 
@@ -205,7 +210,7 @@ TEST_F(MpiExecutor, CanAllReduceValues)
     } else if (my_rank == 3) {
         data = 6;
     }
-    mpi->all_reduce<int>(&data, &sum, 1);
+    mpi->all_reduce<int>(&data, &sum, 1, gko::mpi::op_type::sum);
     ASSERT_EQ(sum, 16);
 }
 

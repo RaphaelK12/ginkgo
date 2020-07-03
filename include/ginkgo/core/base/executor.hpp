@@ -827,6 +827,25 @@ using DefaultExecutor = OmpExecutor;
 }  // namespace kernels
 
 
+namespace mpi {
+
+enum class op_type {
+    sum = 1,
+    min = 2,
+    max = 3,
+    product = 4,
+    custom = 5,
+    logical_and = 6,
+    bitwise_and = 7,
+    logical_or = 8,
+    bitwise_or = 9,
+    logical_xor = 10,
+    bitwise_xor = 11,
+    max_val_and_loc = 12,
+    min_val_and_loc = 13
+};
+}
+
 /**
  * This is the Executor subclass which represents the MPI device
  * (typically CPU).
@@ -891,6 +910,10 @@ public:
 
     MPI_Comm create_communicator(MPI_Comm &comm, int color, int key);
 
+    // MPI_Op create_operation(
+    //     std::function<void(void *, void *, int *, MPI_Datatype *)> func,
+    //     void *arg1, void *arg2, int *len, MPI_Datatype *type);
+
     request_manager<MPI_Request> create_requests_array(int size);
 
     /**
@@ -946,16 +969,16 @@ public:
     // MPI_Reduce
     template <typename ReduceType>
     void reduce(const ReduceType *send_buffer, ReduceType *recv_buffer,
-                int count, int root_rank, bool non_blocking = false);
+                int count, mpi::op_type op_enum, int root_rank,
+                bool non_blocking = false);
 
     // MPI_Allreduce
     template <typename ReduceType>
     void all_reduce(const ReduceType *send_buffer, ReduceType *recv_buffer,
-                    int count, bool non_blocking = false);
+                    int count, mpi::op_type op_enum, bool non_blocking = false);
 
 protected:
     MpiExecutor() = delete;
-
     void mpi_init();
 
     void create_sub_executors(std::vector<std::string> &sub_exec_list,

@@ -282,7 +282,8 @@ void Dense<ValueType>::compute_dot_impl(const LinOp *b, LinOp *result) const
             dynamic_cast<const gko::MpiExecutor *>(exec.get()));
         for (auto i = 0; i < this->get_size()[1]; ++i) {
             mpi_exec->all_reduce<ValueType>(&dense_result->get_values()[i],
-                                            &dense_result->get_values()[i], 1);
+                                            &dense_result->get_values()[i], 1,
+                                            mpi::op_type::sum);
         }
     }
 }
@@ -291,26 +292,33 @@ void Dense<ValueType>::compute_dot_impl(const LinOp *b, LinOp *result) const
 template <typename ValueType>
 void Dense<ValueType>::compute_norm2_impl(LinOp *result) const
 {
-    using NormVector = Dense<remove_complex<ValueType>>;
-    using DenseVec = Dense<ValueType>;
+    using NonComplexType = remove_complex<ValueType>;
+    using NormVector = Dense<NonComplexType>;
+    using DenseVector = Dense<ValueType>;
+    auto result_size = this->get_size();
     GKO_ASSERT_EQUAL_DIMENSIONS(result, dim<2>(1, this->get_size()[1]));
     auto exec = this->get_executor();
     auto sub_exec = exec->get_sub_executor();
     auto norm = as<NormVector>(result);
     if (dynamic_cast<const gko::MpiExecutor *>(exec.get())) {
-        auto tmp_norm = DenseVec::create(sub_exec, result->get_size());
-        sub_exec->run(dense::make_compute_dot(as<Dense<ValueType>>(this),
-                                              as<Dense<ValueType>>(this),
-                                              tmp_norm.get()));
+        auto tmp_norm = DenseVector::create(sub_exec, result_size);
+        sub_exec->run(dense::make_compute_dot(
+            as<DenseVector>(this), as<DenseVector>(this), tmp_norm.get()));
         auto mpi_exec = const_cast<gko::MpiExecutor *>(
             dynamic_cast<const gko::MpiExecutor *>(exec.get()));
-        for (auto i = 0; i < this->get_size()[1]; ++i) {
+        auto norm_arr = gko::Array<NonComplexType>(
+            sub_exec, gko::Array<NonComplexType>::view(sub_exec, result_size[1],
+                                                       norm->get_values()));
+
+        for (auto i = 0; i < result_size[1]; ++i) {
             mpi_exec->all_reduce<ValueType>(&tmp_norm->get_values()[i],
-                                            &tmp_norm->get_values()[i], 1);
-            // HACK!
-            auto val = real(tmp_norm->get_values()[i]);
-            sub_exec->copy(1, &val, &norm->get_values()[i]);
+                                            &tmp_norm->get_values()[i], 1,
+                                            mpi::op_type::sum);
         }
+        auto squared_norm = gko::Array<ValueType>(
+            sub_exec, gko::Array<ValueType>::view(sub_exec, result_size[1],
+                                                  tmp_norm->get_values()));
+        squared_norm.sqrt(norm_arr);
     } else {
         sub_exec->run(
             dense::make_compute_norm2(as<Dense<ValueType>>(this), norm));
