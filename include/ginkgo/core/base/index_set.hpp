@@ -30,6 +30,21 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ******************************<GINKGO LICENSE>*******************************/
 
+
+// ---------------------------------------------------------------------
+//
+// Copyright (C) 2009 - 2020 by the deal.II authors
+//
+// The deal.II library is free software; you can use it, redistribute
+// it, and/or modify it under the terms of the GNU Lesser General
+// Public License as published by the Free Software Foundation; either
+// version 2.1 of the License, or (at your option) any later version.
+// The full text of the license can be found in the file LICENSE.md at
+// the top level directory of deal.II.
+//
+// ---------------------------------------------------------------------
+
+
 #ifndef GKO_CORE_BASE_INDEX_SET_HPP_
 #define GKO_CORE_BASE_INDEX_SET_HPP_
 
@@ -128,6 +143,41 @@ public:
      * contiguous subsets, etc. This function does not have any external effect.
      */
     void merge() const;
+
+    /**
+     * Add a single dens row of a certain stride to the set of
+     * indices represented by this class.
+     * @param[in] begin The first row of the matrix to be added.
+     * @param[in] stride The stride of the rows.
+     *
+     * @note Rows start from 0.
+     */
+    void add_dense_row(const size_type row, const size_type stride);
+
+    /**
+     * Add the dense rows [begin,end] of a certain stride to the set of
+     * indices represented by this class.
+     * @param[in] begin The first row of the matrix to be added.
+     * @param[in] end The last row of the matrix to be added.
+     * @param[in] stride The stride of the rows.
+     *
+     * @note Rows start from 0.
+     */
+    void add_dense_rows(const size_type begin, const size_type end,
+                        const size_type stride);
+
+    /**
+     * Add the sparse rows of a matrix to the set of
+     * indices represented by this class.
+     * @param[in] begin The first row of to be added.
+     * @param[in] end The last row of the subset to be added.
+     * @param[in] nnz_per_row The Array containing the number of nnz per row for
+     * all the rows from [begin,end]
+     *
+     * @note Rows start from 0.
+     */
+    void add_sparse_rows(const size_type begin, const size_type end,
+                         const std::vector<size_type> &nnz_per_row);
 
     /**
      * Add the half-open subset $[\text{begin},\text{end})$ to the set of

@@ -101,6 +101,7 @@ template <typename IndexType>
 Array<ValueType> Array<ValueType>::distribute_data(
     std::shared_ptr<gko::Executor> exec, const IndexSet<IndexType> &index_set)
 {
+    GKO_ASSERT_CONDITION(index_set.get_num_subsets() >= 1);
     using itype = int;
     auto mpi_exec = as<gko::MpiExecutor>(exec.get());
     auto sub_exec = exec->get_sub_executor();

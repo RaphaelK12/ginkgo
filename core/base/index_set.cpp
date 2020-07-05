@@ -30,6 +30,20 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ******************************<GINKGO LICENSE>*******************************/
 
+
+// ---------------------------------------------------------------------
+//
+// Copyright (C) 2009 - 2020 by the deal.II authors
+//
+// The deal.II library is free software; you can use it, redistribute
+// it, and/or modify it under the terms of the GNU Lesser General
+// Public License as published by the Free Software Foundation; either
+// version 2.1 of the License, or (at your option) any later version.
+// The full text of the license can be found in the file LICENSE.md at
+// the top level directory of deal.II.
+//
+// ---------------------------------------------------------------------
+
 #include <algorithm>
 #include <vector>
 
@@ -63,6 +77,93 @@ void IndexSet<IndexType>::merge() const
 {
     if (is_merged_ == true) return;
     merge_impl();
+}
+
+
+template <typename IndexType>
+void IndexSet<IndexType>::add_dense_row(const size_type row,
+                                        const size_type stride)
+{
+    const auto begin = row * stride;
+    const auto end = (row + 1) * stride;
+    GKO_ASSERT_CONDITION(
+        (begin < index_space_size_) ||
+        ((begin == index_space_size_) && (end == index_space_size_)));
+    GKO_ASSERT_CONDITION(end <= index_space_size_);
+    // Should change to something similar to AssertIndexsubset
+    GKO_ASSERT_CONDITION(begin < end + 1);
+
+    const subset new_subset(begin, end);
+
+    // the new index might be larger than the last index present in the
+    // subsets_. Then we can skip the binary search
+    if (subsets_.size() == 0 || begin > subsets_.back().end_) {
+        subsets_.push_back(new_subset);
+    } else {
+        subsets_.insert(
+            std::lower_bound(subsets_.begin(), subsets_.end(), new_subset),
+            new_subset);
+    }
+    is_merged_ = false;
+}
+
+
+template <typename IndexType>
+void IndexSet<IndexType>::add_dense_rows(const size_type begin,
+                                         const size_type end,
+                                         const size_type stride)
+{
+    GKO_ASSERT_CONDITION(
+        (begin < index_space_size_) ||
+        ((begin == index_space_size_) && (end == index_space_size_)));
+    GKO_ASSERT_CONDITION(end <= index_space_size_);
+    // Should change to something similar to AssertIndexsubset
+    GKO_ASSERT_CONDITION(begin < end + 1);
+
+    for (auto i = begin; i <= end; ++i) {
+        const subset new_subset(i * stride, (i + 1) * stride);
+
+        // the new index might be larger than the last index present in the
+        // subsets_. Then we can skip the binary search
+        if (subsets_.size() == 0 || (i * stride) > subsets_.back().end_) {
+            subsets_.push_back(new_subset);
+        } else {
+            subsets_.insert(
+                std::lower_bound(subsets_.begin(), subsets_.end(), new_subset),
+                new_subset);
+        }
+    }
+    is_merged_ = false;
+}
+
+
+template <typename IndexType>
+void IndexSet<IndexType>::add_sparse_rows(
+    const size_type begin, const size_type end,
+    const std::vector<size_type> &nnz_per_row)
+{
+    GKO_ASSERT_CONDITION(
+        (begin < index_space_size_) ||
+        ((begin == index_space_size_) && (end == index_space_size_)));
+    GKO_ASSERT_CONDITION(end <= index_space_size_);
+    // Should change to something similar to AssertIndexsubset
+    GKO_ASSERT_CONDITION(begin < end + 1);
+
+    for (auto i = begin; i <= end; ++i) {
+        auto stride = nnz_per_row[i];
+        const subset new_subset(i * stride, (i + 1) * stride);
+
+        // the new index might be larger than the last index present in the
+        // subsets_. Then we can skip the binary search
+        if (subsets_.size() == 0 || (i * stride) > subsets_.back().end_) {
+            subsets_.push_back(new_subset);
+        } else {
+            subsets_.insert(
+                std::lower_bound(subsets_.begin(), subsets_.end(), new_subset),
+                new_subset);
+        }
+    }
+    is_merged_ = false;
 }
 
 

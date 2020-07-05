@@ -501,12 +501,29 @@ protected:
     }
 
 
-    template <typename ExecType, typename IndexSetType, typename ValuesArray>
-    static std::unique_ptr<Dense> distribute_data_impl(ExecType &exec,
-                                                       IndexSetType &index_set,
-                                                       dim<2> &size,
-                                                       ValuesArray &&values,
-                                                       size_type stride)
+    template <typename ExecType, typename ValuesArray>
+    static std::unique_ptr<Dense> distribute_data_impl(
+        ExecType &exec, dim<2> &size, const Array<size_type> &rows,
+        ValuesArray &&values, size_type stride)
+    {
+        // TODO: Is this better than passing the max size as a paramter ?
+        auto max_index_size =
+            std::max_element(rows.get_const_data(),
+                             rows.get_const_data() + rows.get_num_elems());
+        auto index_set =
+            gko::IndexSet<gko::int32>{(*max_index_size + 1) * stride};
+        for (auto i = 0; i < rows.get_num_elems(); ++i) {
+            index_set.add_dense_row(rows.get_const_data()[i], stride);
+        }
+        return Dense::create(exec, size,
+                             values.distribute_data(exec, index_set), stride);
+    }
+
+
+    template <typename ExecType, typename IndexType, typename ValuesArray>
+    static std::unique_ptr<Dense> distribute_data_impl(
+        ExecType &exec, dim<2> &size, IndexSet<IndexType> &index_set,
+        ValuesArray &&values, size_type stride)
     {
         return Dense::create(exec, size,
                              values.distribute_data(exec, index_set), stride);
