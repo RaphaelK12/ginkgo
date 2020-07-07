@@ -211,6 +211,21 @@ TYPED_TEST(IndexSet, CanAddRangeOfIndices)
 }
 
 
+TYPED_TEST(IndexSet, CanAddRangeOfIndicesWithIterators)
+{
+    auto idx_set2 = gko::IndexSet<TypeParam>{11};
+    auto indices = std::vector<TypeParam>{0, 2, 1, 6, 8};
+    idx_set2.add_subset(1, 5);
+    ASSERT_EQ(idx_set2.get_num_elems(), 4);
+    idx_set2.add_indices(indices.begin(), indices.end());
+    ASSERT_EQ(idx_set2.get_num_elems(), 7);
+    ASSERT_TRUE(idx_set2.is_element(4));
+    ASSERT_TRUE(idx_set2.is_element(6));
+    ASSERT_TRUE(idx_set2.is_element(8));
+    ASSERT_FALSE(idx_set2.is_element(5));
+}
+
+
 TYPED_TEST(IndexSet, KnowsItsElements)
 {
     auto idx_set = gko::IndexSet<TypeParam>{10};

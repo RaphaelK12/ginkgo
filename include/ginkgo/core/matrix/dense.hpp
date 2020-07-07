@@ -502,10 +502,13 @@ protected:
 
 
     template <typename ExecType, typename ValuesArray>
-    static std::unique_ptr<Dense> distribute_data_impl(
-        ExecType &exec, dim<2> &size, const Array<size_type> &rows,
-        ValuesArray &&values, size_type stride)
+    static std::unique_ptr<Dense> distribute_data_impl(ExecType &exec,
+                                                       dim<2> &size,
+                                                       Array<size_type> &rows,
+                                                       ValuesArray &&values,
+                                                       size_type stride)
     {
+        rows.set_executor(exec->get_master());
         // TODO: Is this better than passing the max size as a paramter ?
         auto max_index_size =
             std::max_element(rows.get_const_data(),

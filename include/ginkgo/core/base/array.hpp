@@ -592,7 +592,7 @@ public:
      */
     void set_executor(std::shared_ptr<const Executor> exec)
     {
-        if (exec == exec_) {
+        if (exec->get_mem_space() == exec_->get_mem_space()) {
             // moving to the same executor, no-op
             return;
         }

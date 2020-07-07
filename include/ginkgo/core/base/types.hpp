@@ -491,6 +491,29 @@ GKO_ATTRIBUTES constexpr bool operator!=(precision_reduction x,
  *                Should take two arguments, which are replaced by the
  *                value and index types.
  */
+#define GKO_INSTANTIATE_FOR_EACH_VALUE_INDEX_AND_INDEX_TYPE(_macro) \
+    template _macro(float, int32);                                  \
+    template _macro(double, int32);                                 \
+    template _macro(std::complex<float>, int32);                    \
+    template _macro(std::complex<double>, int32);                   \
+    template _macro(float, int64);                                  \
+    template _macro(double, int64);                                 \
+    template _macro(std::complex<float>, int64);                    \
+    template _macro(std::complex<double>, int64);                   \
+    template _macro(int32, int32);                                  \
+    template _macro(int32, int64);                                  \
+    template _macro(int64, int32);                                  \
+    template _macro(int64, int64)
+
+
+/**
+ * Instantiates a template for each value and index type compiled by Ginkgo.
+ *
+ * @param _macro  A macro which expands the template instantiation
+ *                (not including the leading `template` specifier).
+ *                Should take two arguments, which are replaced by the
+ *                value and index types.
+ */
 #define GKO_INSTANTIATE_FOR_EACH_SEPARATE_VALUE_AND_INDEX_TYPE(_macro) \
     template _macro(float);                                            \
     template _macro(double);                                           \

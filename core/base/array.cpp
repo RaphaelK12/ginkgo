@@ -213,6 +213,7 @@ Array<ValueType> Array<ValueType>::distribute_data(
         std::shared_ptr<gko::Executor> exec,               \
         const IndexSet<IndexType> &index_set)
 
-GKO_INSTANTIATE_FOR_EACH_VALUE_AND_INDEX_TYPE(GKO_DECLARE_ARRAY_DISTRIBUTE);
+GKO_INSTANTIATE_FOR_EACH_VALUE_INDEX_AND_INDEX_TYPE(
+    GKO_DECLARE_ARRAY_DISTRIBUTE);
 
 }  // namespace gko

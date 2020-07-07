@@ -147,8 +147,8 @@ public:
     /**
      * Add a single dens row of a certain stride to the set of
      * indices represented by this class.
-     * @param[in] begin The first row of the matrix to be added.
-     * @param[in] stride The stride of the rows.
+     * @param[in] row The row of the matrix to be added.
+     * @param[in] stride The stride of the row.
      *
      * @note Rows start from 0.
      */
@@ -165,6 +165,16 @@ public:
      */
     void add_dense_rows(const size_type begin, const size_type end,
                         const size_type stride);
+
+    /**
+     * Add a single sparse row to the set of
+     * indices represented by this class.
+     * @param[in] row The row of the matrix to be added.
+     * @param[in] nnz_in_row The number of nonzeros in the rows.
+     *
+     * @note Rows start from 0.
+     */
+    void add_sparse_row(const size_type row, const size_type nnz_in_row);
 
     /**
      * Add the sparse rows of a matrix to the set of
@@ -217,10 +227,59 @@ public:
      * added
      * @param[in] end The past-the-end iterator for the subset of elements to be
      * added. @pre The condition <code>begin@<=end</code> needs to be satisfied.
-     * FIXME: Undefined reference error
      */
     template <typename ForwardIterator>
-    void add_indices(const ForwardIterator &begin, const ForwardIterator &end);
+    void add_indices(const ForwardIterator &begin, const ForwardIterator &end)
+    {
+        if (begin == end) return;
+
+        // identify subsets_ in the given iterator subset by checking whether
+        // some indices happen to be consecutive. to avoid quadratic complexity
+        // when calling add_subset many times (as add_subset() going into the
+        // middle of an already existing subset must shift entries around), we
+        // first collect a vector of subsets_.
+        std::vector<std::pair<size_type, size_type>> tmp_subsets;
+        bool subsets_are_sorted = true;
+        for (ForwardIterator p = begin; p != end;) {
+            const size_type begin_index = *p;
+            size_type end_index = begin_index + 1;
+            ForwardIterator q = p;
+            ++q;
+            while ((q != end) && (*q == end_index)) {
+                ++end_index;
+                ++q;
+            }
+
+            tmp_subsets.emplace_back(begin_index, end_index);
+            p = q;
+
+            // if the starting index of the next go-around of the for loop is
+            // less than the end index of the one just identified, then we will
+            // have at least one pair of subsets_ that are not sorted, and
+            // consequently the whole collection of subsets_ is not sorted.
+            if (p != end && *p < end_index) subsets_are_sorted = false;
+        }
+
+        if (!subsets_are_sorted)
+            std::sort(tmp_subsets.begin(), tmp_subsets.end());
+
+        // if we have many subsets_, we first construct a temporary index set
+        // (where we add subsets_ in a consecutive way, so fast), otherwise, we
+        // work with add_subset(). the number 9 is chosen heuristically given
+        // the fact that there are typically up to 8 independent subsets_ when
+        // adding the degrees of freedom on a 3D cell or 9 when adding degrees
+        // of freedom of faces. if doing cell-by-cell additions, we want to
+        // avoid repeated calls to IndexSet::merge() which gets called upon
+        // merging two index sets, so we want to be in the other branch then.
+        if (tmp_subsets.size() > 9) {
+            IndexSet<IndexType> tmp_set(get_size());
+            tmp_set.subsets_.reserve(tmp_subsets.size());
+            for (const auto &i : tmp_subsets)
+                tmp_set.add_subset(i.first, i.second);
+            this->add_indices(tmp_set);
+        } else
+            for (const auto &i : tmp_subsets) add_subset(i.first, i.second);
+    }
 
     /**
      * Return whether the specified index is an element of the index set.
