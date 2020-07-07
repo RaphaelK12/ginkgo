@@ -1138,6 +1138,23 @@ void extract_diagonal(std::shared_ptr<const CudaExecutor> exec,
 GKO_INSTANTIATE_FOR_EACH_VALUE_AND_INDEX_TYPE(GKO_DECLARE_CSR_EXTRACT_DIAGONAL);
 
 
+template <typename ValueType, typename IndexType>
+void scale(std::shared_ptr<const CudaExecutor> exec,
+           const matrix::Dense<ValueType> *alpha,
+           matrix::Csr<ValueType, IndexType> *to_scale)
+{
+    const auto nnz = to_scale->get_num_stored_elements();
+    const auto grid_dim = ceildiv(nnz, default_block_size);
+    const auto alpha_values = alpha->get_const_values();
+    auto values = to_scale->get_values();
+
+    kernel::scale<<<grid_dim, default_block_size>>>(
+        nnz, as_cuda_type(alpha_values), as_cuda_type(values));
+}
+
+GKO_INSTANTIATE_FOR_EACH_VALUE_AND_INDEX_TYPE(GKO_DECLARE_CSR_SCALE_KERNEL);
+
+
 }  // namespace csr
 }  // namespace cuda
 }  // namespace kernels

@@ -80,6 +80,7 @@ GKO_REGISTER_OPERATION(sort_by_column_index, csr::sort_by_column_index);
 GKO_REGISTER_OPERATION(is_sorted_by_column_index,
                        csr::is_sorted_by_column_index);
 GKO_REGISTER_OPERATION(extract_diagonal, csr::extract_diagonal);
+GKO_REGISTER_OPERATION(scale, csr::scale);
 GKO_REGISTER_OPERATION(fill_array, components::fill_array);
 
 
@@ -479,6 +480,14 @@ std::unique_ptr<Dense<ValueType>> Csr<ValueType, IndexType>::extract_diagonal()
                                    zero<ValueType>()));
     exec->run(csr::make_extract_diagonal(this, lend(diag)));
     return diag;
+}
+
+
+template <typename ValueType, typename IndexType>
+void Csr<ValueType, IndexType>::scale(const Dense<ValueType> *alpha)
+{
+    auto exec = this->get_executor();
+    exec->run(csr::make_scale(alpha, this));
 }
 
 
