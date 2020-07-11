@@ -573,7 +573,11 @@ GKO_ATTRIBUTES constexpr bool operator!=(precision_reduction x,
     template _macro(float, double);                             \
     template _macro(double, float);                             \
     template _macro(std::complex<float>, std::complex<double>); \
-    template _macro(std::complex<double>, std::complex<float>)
+    template _macro(std::complex<double>, std::complex<float>); \
+    template _macro(int, int);                                  \
+    template _macro(int, long int);                             \
+    template _macro(long int, long int);                        \
+    template _macro(long int, int)
 
 
 }  // namespace gko

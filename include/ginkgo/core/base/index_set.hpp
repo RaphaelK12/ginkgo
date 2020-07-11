@@ -307,6 +307,7 @@ public:
      * at the index one larger than the last one stored on process $p$.
      * In case there is only one MPI process, this just means that the IndexSet
      * is complete.
+     * TODO
      */
     bool is_ascending_and_one_to_one(const gko::Executor *exec) const;
 

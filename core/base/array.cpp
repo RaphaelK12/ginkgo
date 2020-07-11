@@ -102,19 +102,18 @@ Array<ValueType> Array<ValueType>::distribute_data(
     std::shared_ptr<gko::Executor> exec, const IndexSet<IndexType> &index_set)
 {
     GKO_ASSERT_CONDITION(index_set.get_num_subsets() >= 1);
-    using itype = int;
+    using itype = IndexType;
     auto mpi_exec = as<gko::MpiExecutor>(exec.get());
     auto sub_exec = exec->get_sub_executor();
     auto num_ranks = mpi_exec->get_num_ranks();
     auto my_rank = mpi_exec->get_my_rank();
     auto root_rank = mpi_exec->get_root_rank();
 
-    // int because MPI functions only support 32 bit integers.
     itype num_subsets = index_set.get_num_subsets();
     auto num_subsets_array =
         Array<itype>{sub_exec->get_master(), static_cast<size_type>(num_ranks)};
-    mpi_exec->gather<itype, itype>(&num_subsets, 1,
-                                   num_subsets_array.get_data(), 1, root_rank);
+    mpi_exec->gather(&num_subsets, 1, num_subsets_array.get_data(), 1,
+                     root_rank);
     auto total_num_subsets =
         std::accumulate(num_subsets_array.get_data(),
                         num_subsets_array.get_data() + num_ranks, 0);
@@ -123,8 +122,7 @@ Array<ValueType> Array<ValueType>::distribute_data(
     itype num_elems = static_cast<itype>(index_set.get_num_elems());
     auto num_elems_array =
         Array<itype>{sub_exec->get_master(), static_cast<size_type>(num_ranks)};
-    mpi_exec->gather<itype, itype>(&num_elems, 1, num_elems_array.get_data(), 1,
-                                   root_rank);
+    mpi_exec->gather(&num_elems, 1, num_elems_array.get_data(), 1, root_rank);
 
     auto start_idx_array = Array<itype>{sub_exec->get_master(),
                                         static_cast<size_type>(num_subsets)};
@@ -142,19 +140,28 @@ Array<ValueType> Array<ValueType>::distribute_data(
         num_elems_in_subset.get_data()[i] = (*first_interval).get_num_elems();
         first_interval++;
     }
-    auto displ = gko::Array<itype>{num_subsets_array};
+    auto recv_count_array = gko::Array<int>{sub_exec->get_master(),
+                                            num_subsets_array.get_num_elems()};
+    detail::convert_data(
+        sub_exec->get_master(), num_subsets_array.get_num_elems(),
+        num_subsets_array.get_const_data(), recv_count_array.get_data());
+    auto displ = gko::Array<int>{sub_exec->get_master(),
+                                 num_subsets_array.get_num_elems()};
+    detail::convert_data(sub_exec->get_master(),
+                         num_subsets_array.get_num_elems(),
+                         num_subsets_array.get_const_data(), displ.get_data());
     std::partial_sum(displ.get_data(), displ.get_data() + displ.get_num_elems(),
                      displ.get_data());
     for (auto i = 0; i < displ.get_num_elems(); ++i) {
-        displ.get_data()[i] -= num_subsets_array.get_data()[i];
+        displ.get_data()[i] -= recv_count_array.get_data()[i];
     }
-    mpi_exec->gather<itype, itype>(
-        start_idx_array.get_data(), num_subsets, offset_array.get_data(),
-        num_subsets_array.get_data(), displ.get_data(), root_rank);
-    mpi_exec->gather<itype, itype>(num_elems_in_subset.get_data(), num_subsets,
-                                   global_num_elems_subset_array.get_data(),
-                                   num_subsets_array.get_data(),
-                                   displ.get_data(), root_rank);
+    mpi_exec->gather(start_idx_array.get_const_data(), int(num_subsets),
+                     offset_array.get_data(), recv_count_array.get_const_data(),
+                     displ.get_const_data(), root_rank);
+    mpi_exec->gather(num_elems_in_subset.get_const_data(), int(num_subsets),
+                     global_num_elems_subset_array.get_data(),
+                     recv_count_array.get_const_data(), displ.get_const_data(),
+                     root_rank);
 
     auto tag = gko::Array<itype>{sub_exec->get_master(),
                                  static_cast<size_type>(num_subsets)};
@@ -164,9 +171,9 @@ Array<ValueType> Array<ValueType>::distribute_data(
     auto tags = gko::Array<itype>{
         sub_exec->get_master(),
         static_cast<size_type>(num_ranks * total_num_subsets)};
-    mpi_exec->gather<itype, itype>(tag.get_data(), num_subsets, tags.get_data(),
-                                   num_subsets_array.get_data(),
-                                   displ.get_data(), root_rank);
+    mpi_exec->gather(tag.get_const_data(), int(num_subsets), tags.get_data(),
+                     recv_count_array.get_const_data(), displ.get_const_data(),
+                     root_rank);
 
     auto distributed_array = Array{exec, index_set.get_num_elems()};
     auto req_array =
