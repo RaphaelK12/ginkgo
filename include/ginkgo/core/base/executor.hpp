@@ -863,8 +863,6 @@ public:
     template <typename T>
     using request_manager = std::unique_ptr<T, std::function<void(T *)>>;
 
-    using DefaultMemorySpace = DistributedMemorySpace;
-
     /**
      * Creates a new MpiExecutor.
      */
@@ -1001,17 +999,6 @@ protected:
         num_ranks_ = this->get_num_ranks();
         root_rank_ = 0;
         this->create_sub_executors(sub_exec_list_, sub_executor_);
-    }
-
-    bool check_mem_space_validity(std::shared_ptr<MemorySpace> mem_space)
-    {
-        auto check_default_mem_space =
-            dynamic_cast<DefaultMemorySpace *>(mem_space.get());
-        if (check_default_mem_space == nullptr) {
-            return false;
-        } else {
-            return true;
-        }
     }
 
 private:

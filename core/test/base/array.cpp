@@ -360,7 +360,6 @@ TYPED_TEST(Array, CustomDeleterCannotBeResized)
 TYPED_TEST(Array, CanBeAssignedAnExecutor)
 {
     gko::Array<TypeParam> a;
-
     a.set_executor(this->exec);
 
     ASSERT_EQ(a.get_executor(), this->exec);

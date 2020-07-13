@@ -117,7 +117,6 @@ public:
      */
     Array() noexcept
         : num_elems_(0),
-          mem_space_(nullptr),
           data_(nullptr, default_deleter{nullptr}),
           exec_(nullptr)
     {}
@@ -130,12 +129,7 @@ public:
     Array(std::shared_ptr<const Executor> exec) noexcept
         : num_elems_(0), exec_(std::move(exec))
     {
-        if (exec_ != nullptr) {
-            mem_space_ = exec_->get_mem_space();
-        } else {
-            mem_space_ = nullptr;
-        }
-        data_ = data_manager(nullptr, default_deleter{mem_space_});
+        data_ = data_manager(nullptr, default_deleter{exec_->get_mem_space()});
     }
 
     /**
@@ -147,8 +141,7 @@ public:
      */
     Array(std::shared_ptr<const Executor> exec, size_type num_elems)
         : num_elems_(num_elems),
-          mem_space_(exec->get_mem_space()),
-          data_(nullptr, default_deleter{mem_space_}),
+          data_(nullptr, default_deleter{exec->get_mem_space()}),
           exec_(std::move(exec))
     {
         if (num_elems > 0) {
@@ -177,10 +170,7 @@ public:
     template <typename DeleterType>
     Array(std::shared_ptr<const Executor> exec, size_type num_elems,
           value_type *data, DeleterType deleter)
-        : num_elems_{num_elems},
-          mem_space_(exec->get_mem_space()),
-          data_(data, deleter),
-          exec_{exec}
+        : num_elems_{num_elems}, data_(data, deleter), exec_{exec}
     {}
 
     /**
@@ -592,7 +582,7 @@ public:
      */
     void set_executor(std::shared_ptr<const Executor> exec)
     {
-        if (exec->get_mem_space() == exec_->get_mem_space()) {
+        if (exec == exec_) {
             // moving to the same executor, no-op
             return;
         }
