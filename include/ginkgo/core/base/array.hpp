@@ -127,10 +127,12 @@ public:
      * @param exec  the Executor where the array data is allocated
      */
     Array(std::shared_ptr<const Executor> exec) noexcept
-        : num_elems_(0), exec_(std::move(exec))
-    {
-        data_ = data_manager(nullptr, default_deleter{exec_->get_mem_space()});
-    }
+        : num_elems_(0),
+          data_(nullptr,
+                default_deleter{exec == nullptr ? nullptr
+                                                : exec->get_mem_space()}),
+          exec_(std::move(exec))
+    {}
 
     /**
      * Creates an Array on the specified Executor.
@@ -618,7 +620,6 @@ private:
         std::unique_ptr<value_type[], std::function<void(value_type[])>>;
 
     size_type num_elems_;
-    std::shared_ptr<const MemorySpace> mem_space_;
     data_manager data_;
     std::shared_ptr<const Executor> exec_;
 };

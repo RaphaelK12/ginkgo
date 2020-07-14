@@ -30,19 +30,60 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ******************************<GINKGO LICENSE>*******************************/
 
+#include "core/components/sqrt_array.hpp"
 
-namespace kernel {
+
+#include <memory>
+#include <random>
+#include <vector>
 
 
-template <typename SourceType, typename TargetType>
-__global__ __launch_bounds__(default_block_size) void sqrt_array(
-    size_type n, const SourceType *__restrict__ in, TargetType *out)
-{
-    const auto tidx = thread::get_thread_id_flat();
-    if (tidx < n) {
-        out[tidx] = sqrt(real(in[tidx]));
+#include <gtest/gtest.h>
+
+
+#include <ginkgo/core/base/array.hpp>
+
+
+#include "core/test/utils/assertions.hpp"
+
+
+namespace {
+
+
+class SqrtArray : public ::testing::Test {
+protected:
+    using value_type = double;
+    SqrtArray()
+        : ref(gko::ReferenceExecutor::create()),
+          exec(gko::CudaExecutor::create(0, ref)),
+          total_size(6344),
+          vals(ref, total_size),
+          rsqrt(ref, total_size),
+          dsqrt(exec, total_size)
+    {
+        std::fill_n(vals.get_data(), total_size, 1234.0);
+        std::fill_n(vals.get_data() + total_size - 10, 10, 163.0);
+        std::fill_n(rsqrt.get_data(), total_size, std::sqrt(1234.0));
+        std::fill_n(rsqrt.get_data() + total_size - 10, 10, std::sqrt(163.0));
+        dvals = gko::Array<value_type>{exec, vals};
     }
+
+    std::shared_ptr<gko::ReferenceExecutor> ref;
+    std::shared_ptr<gko::CudaExecutor> exec;
+    gko::size_type total_size;
+    gko::Array<value_type> vals;
+    gko::Array<value_type> dvals;
+    gko::Array<value_type> rsqrt;
+    gko::Array<value_type> dsqrt;
+};
+
+
+TEST_F(SqrtArray, EqualsReference)
+{
+    gko::kernels::cuda::components::sqrt_array(
+        exec, total_size, dvals.get_data(), dsqrt.get_data());
+    GKO_ASSERT_ARRAY_EQ(rsqrt, dsqrt);
 }
 
 
-}  // namespace kernel
+}  // namespace

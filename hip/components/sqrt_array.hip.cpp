@@ -54,9 +54,8 @@ void sqrt_array(std::shared_ptr<const DefaultExecutor> exec, size_type size,
                 const SourceType *in, TargetType *out)
 {
     auto num_blocks = ceildiv(size, default_block_size);
-    hipLaunchKernelGGL(HIP_KERNEL_NAME(sqrt_array), num_blocks,
-                       default_block_size, 0, 0, size, as_hip_type(in),
-                       as_hip_type(out));
+    hipLaunchKernelGGL(kernel::sqrt_array, num_blocks, default_block_size, 0, 0,
+                       size, as_hip_type(in), as_hip_type(out));
 }
 
 GKO_INSTANTIATE_FOR_EACH_VALUE_TYPE_PAIR(GKO_DECLARE_SQRT_ARRAY_KERNEL);

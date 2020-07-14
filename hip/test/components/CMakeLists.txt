@@ -1,5 +1,6 @@
 ginkgo_create_hip_test(cooperative_groups_kernels)
 ginkgo_create_hip_test(fill_array)
+ginkgo_create_hip_test(sqrt_array)
 ginkgo_create_hip_test(merging_kernels)
 ginkgo_create_hip_test(precision_conversion)
 ginkgo_create_hip_test(prefix_sum)

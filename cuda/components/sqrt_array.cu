@@ -54,7 +54,7 @@ void sqrt_array(std::shared_ptr<const DefaultExecutor> exec, size_type size,
                 const SourceType *in, TargetType *out)
 {
     auto num_blocks = ceildiv(size, default_block_size);
-    convert_precision<<<num_blocks, default_block_size>>>(
+    kernel::sqrt_array<<<num_blocks, default_block_size, 0, 0>>>(
         size, as_cuda_type(in), as_cuda_type(out));
 }
 
