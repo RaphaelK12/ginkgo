@@ -232,17 +232,18 @@ add_subdirectory(include)        # Public API self-contained check
 if (GINKGO_BUILD_REFERENCE)
   add_subdirectory(reference)  # Reference kernel implementations
 endif()
+
 if (GINKGO_BUILD_OMP)
   add_subdirectory(omp)        # High-performance omp kernels
+endif()
+
+if (GINKGO_BUILD_MPI)
+    add_subdirectory(mpi)        # High-performance mpi
 endif()
 # HIP needs to be last because it builds the GINKGO_RPATH_FOR_HIP variable
 # which needs to know the `ginkgo` target.
 if(GINKGO_BUILD_HIP)
   add_subdirectory(hip)        # High-performance kernels for AMD or NVIDIA GPUs
-endif()
-
-if (GINKGO_BUILD_MPI)
-  add_subdirectory(mpi)        # High-performance mpi
 endif()
 
 

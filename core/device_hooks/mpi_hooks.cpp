@@ -47,27 +47,15 @@ version version_info::get_mpi_version() noexcept
 
 void MpiExecutor::mpi_init() {}
 
-void MpiExecutor::create_sub_executors(
-    std::vector<std::string> &sub_exec_list,
-    std::shared_ptr<gko::Executor> &sub_executor)
-{}
-
 int MpiExecutor::get_num_ranks() const { return 0; }
 
 int MpiExecutor::get_my_rank() const GKO_NOT_COMPILED(mpi);
 
 std::shared_ptr<MpiExecutor> MpiExecutor::create(
-    std::initializer_list<std::string> sub_exec_list, int num_args, char **args)
+    std::shared_ptr<Executor> sub_executor, int num_args, char **args)
 {
     return std::shared_ptr<MpiExecutor>(
-        new MpiExecutor(sub_exec_list, num_args, args));
-}
-
-std::shared_ptr<MpiExecutor> MpiExecutor::create()
-{
-    int num_args = 0;
-    char **args;
-    return MpiExecutor::create({}, num_args, args);
+        new MpiExecutor(sub_executor, num_args, args));
 }
 
 

@@ -66,7 +66,7 @@ endif()
 #regardless of whether it is installed or added as a subdirectory
 add_library(Ginkgo::ginkgo ALIAS ginkgo)
 target_link_libraries(ginkgo
-  PUBLIC ginkgo_omp ginkgo_cuda ginkgo_reference ginkgo_hip ginkgo_mpi)
+    PUBLIC ginkgo_omp ginkgo_cuda ginkgo_reference ginkgo_mpi ginkgo_hip)
 # The PAPI dependency needs to be exposed to the user.
 if (GINKGO_HAVE_PAPI_SDE)
   target_link_libraries(ginkgo PUBLIC PAPI::PAPI)

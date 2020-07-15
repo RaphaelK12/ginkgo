@@ -59,33 +59,6 @@ void MpiExecutor::mpi_init()
 }
 
 
-void MpiExecutor::create_sub_executors(
-    std::vector<std::string> &sub_exec_list,
-    std::shared_ptr<gko::Executor> &sub_executor)
-{
-    auto num_gpus = this->get_num_gpus();
-    int dev_id = 0;
-    for (auto i = 0; i < sub_exec_list.size(); ++i) {
-        if (sub_exec_list[i] == "omp") {
-            sub_executor = gko::OmpExecutor::create();
-        }
-        if (sub_exec_list[i] == "reference") {
-            sub_executor = gko::ReferenceExecutor::create();
-        }
-        if (sub_exec_list[i] == "cuda" && num_gpus > 0 && dev_id < num_gpus) {
-            sub_executor =
-                gko::CudaExecutor::create(dev_id, gko::OmpExecutor::create());
-            dev_id++;
-        }
-        if (sub_exec_list[i] == "hip" && num_gpus > 0 && dev_id < num_gpus) {
-            sub_executor =
-                gko::HipExecutor::create(dev_id, gko::OmpExecutor::create());
-            dev_id++;
-        }
-    }
-}
-
-
 MpiExecutor::request_manager<MPI_Request> MpiExecutor::create_requests_array(
     int size)
 {
@@ -262,19 +235,11 @@ void MpiExecutor::scatter(const SendType *send_buffer, const int *send_counts,
 
 
 std::shared_ptr<MpiExecutor> MpiExecutor::create(
-    std::initializer_list<std::string> sub_exec_list, int num_args, char **args)
+    std::shared_ptr<Executor> sub_executor, int num_args, char **args)
 {
     return std::shared_ptr<MpiExecutor>(
-        new MpiExecutor(sub_exec_list, num_args, args),
+        new MpiExecutor(sub_executor, num_args, args),
         [](MpiExecutor *exec) { delete exec; });
-}
-
-
-std::shared_ptr<MpiExecutor> MpiExecutor::create()
-{
-    int num_args = 0;
-    char **args;
-    return MpiExecutor::create({"reference"}, num_args, args);
 }
 
 

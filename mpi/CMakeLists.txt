@@ -14,15 +14,16 @@ target_include_directories(ginkgo_mpi
 target_link_libraries(ginkgo_mpi PRIVATE "${MPI_C_LIBRARIES}" "${MPI_CXX_LIBRARIES}")
 target_compile_options(ginkgo_mpi PRIVATE "${GINKGO_COMPILER_FLAGS}")
 
-# Need to link to allow mpi kernels to call other kernels.
-target_link_libraries(ginkgo_mpi PUBLIC ginkgo_cuda ginkgo_omp ginkgo_reference ginkgo_hip)
-
 ginkgo_default_includes(ginkgo_mpi)
 ginkgo_install_library(ginkgo_mpi mpi)
 
 if (GINKGO_HAVE_HWLOC)
   target_link_libraries(ginkgo_mpi PRIVATE ${HWLOC_hwloc_LIBRARY})
   target_include_directories(ginkgo_mpi PRIVATE ${HWLOC_hwloc.h_DIRS})
+endif()
+
+if (GINKGO_CHECK_CIRCULAR_DEPS)
+    ginkgo_check_headers(ginkgo_mpi)
 endif()
 
 if(GINKGO_BUILD_TESTS)

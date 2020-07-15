@@ -55,7 +55,7 @@ protected:
     {
         char **argv;
         int argc = 0;
-        mpi = gko::MpiExecutor::create({"omp"});
+        mpi = gko::MpiExecutor::create(gko::OmpExecutor::create());
     }
 
     void TearDown()
@@ -85,14 +85,6 @@ TEST_F(MpiExecutor, KnowsItsRanks)
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
     EXPECT_EQ(rank, mpi->get_my_rank());
-}
-
-
-TEST_F(MpiExecutor, KnowsItsSubExecutorList)
-{
-    auto sub_exec_list = mpi->get_sub_executor_list();
-
-    EXPECT_EQ("omp", sub_exec_list[0]);
 }
 
 

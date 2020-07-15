@@ -827,207 +827,6 @@ using DefaultExecutor = OmpExecutor;
 }  // namespace kernels
 
 
-namespace mpi {
-
-enum class op_type {
-    sum = 1,
-    min = 2,
-    max = 3,
-    product = 4,
-    custom = 5,
-    logical_and = 6,
-    bitwise_and = 7,
-    logical_or = 8,
-    bitwise_or = 9,
-    logical_xor = 10,
-    bitwise_xor = 11,
-    max_val_and_loc = 12,
-    min_val_and_loc = 13
-};
-}
-
-/**
- * This is the Executor subclass which represents the MPI device
- * (typically CPU).
- *
- * @ingroup exec_mpi
- * @ingroup Executor
- */
-class MpiExecutor : public detail::ExecutorBase<MpiExecutor>,
-                    public std::enable_shared_from_this<MpiExecutor>,
-                    public machine_config::topology<MpiExecutor> {
-    friend class detail::ExecutorBase<MpiExecutor>;
-
-public:
-    using mpi_exec_info = machine_config::topology<MpiExecutor>;
-    template <typename T>
-    using request_manager = std::unique_ptr<T, std::function<void(T *)>>;
-
-    /**
-     * Creates a new MpiExecutor.
-     */
-    static std::shared_ptr<MpiExecutor> create(
-        std::initializer_list<std::string> sub_exec_list, int num_args = 0,
-        char **args = nullptr);
-
-    static std::shared_ptr<MpiExecutor> create();
-
-    std::shared_ptr<Executor> get_master() noexcept override;
-
-    std::shared_ptr<const Executor> get_master() const noexcept override;
-
-    std::shared_ptr<Executor> get_sub_executor() noexcept override;
-
-    std::shared_ptr<const Executor> get_sub_executor() const noexcept override;
-
-    void run(const Operation &op) const override
-    {
-        this->template log<log::Logger::operation_launched>(this, &op);
-        op.run(std::static_pointer_cast<const MpiExecutor>(
-            this->shared_from_this()));
-        this->template log<log::Logger::operation_completed>(this, &op);
-    }
-
-    int get_num_ranks() const;
-
-    int get_my_rank() const;
-
-    MPI_Comm get_communicator() const { return mpi_comm_; }
-
-    void set_root_rank(int rank) { root_rank_ = rank; }
-
-    int get_root_rank() const { return root_rank_; }
-
-    std::shared_ptr<MemorySpace> get_mem_space() noexcept override;
-
-    std::shared_ptr<const MemorySpace> get_mem_space() const noexcept override;
-
-    void synchronize() const override;
-
-    void synchronize_communicator(MPI_Comm &comm) const;
-
-    MPI_Comm create_communicator(MPI_Comm &comm, int color, int key);
-
-    // MPI_Op create_operation(
-    //     std::function<void(void *, void *, int *, MPI_Datatype *)> func,
-    //     void *arg1, void *arg2, int *len, MPI_Datatype *type);
-
-    request_manager<MPI_Request> create_requests_array(int size);
-
-    /**
-     * Get the Executor information for this executor
-     *
-     * @return the executor info (mpi_exec_info*) for this executor
-     */
-    mpi_exec_info *get_exec_info() const { return exec_info_.get(); }
-
-    std::vector<std::string> get_sub_executor_list() const
-    {
-        return sub_exec_list_;
-    }
-
-    // MPI_Send
-    template <typename SendType>
-    void send(const SendType *send_buffer, const int send_count,
-              const int destination_rank, const int send_tag,
-              bool non_blocking = false);
-
-    // MPI_Recv
-    template <typename RecvType>
-    void recv(RecvType *recv_buffer, const int recv_count,
-              const int source_rank, const int recv_tag,
-              bool non_blocking = false);
-
-    // MPI_Gather
-    template <typename SendType, typename RecvType>
-    void gather(const SendType *send_buffer, const int send_count,
-                RecvType *recv_buffer, const int recv_count, int root_rank);
-
-    // MPI_Gatherv
-    template <typename SendType, typename RecvType>
-    void gather(const SendType *send_buffer, const int send_count,
-                RecvType *recv_buffer, const int *recv_counts,
-                const int *displacements, int root_rank);
-
-    // MPI_Scatter
-    template <typename SendType, typename RecvType>
-    void scatter(const SendType *send_buffer, const int send_count,
-                 RecvType *recv_buffer, const int recv_count, int root_rank);
-
-    // MPI_Scatterv
-    template <typename SendType, typename RecvType>
-    void scatter(const SendType *send_buffer, const int *send_counts,
-                 const int *displacements, RecvType *recv_buffer,
-                 const int recv_count, int root_rank);
-
-    // MPI_Bcast
-    template <typename BroadcastType>
-    void broadcast(BroadcastType *buffer, int count, int root_rank);
-
-    // MPI_Reduce
-    template <typename ReduceType>
-    void reduce(const ReduceType *send_buffer, ReduceType *recv_buffer,
-                int count, mpi::op_type op_enum, int root_rank,
-                bool non_blocking = false);
-
-    // MPI_Allreduce
-    template <typename ReduceType>
-    void all_reduce(const ReduceType *send_buffer, ReduceType *recv_buffer,
-                    int count, mpi::op_type op_enum, bool non_blocking = false);
-
-protected:
-    MpiExecutor() = delete;
-    void mpi_init();
-
-    void create_sub_executors(std::vector<std::string> &sub_exec_list,
-                              std::shared_ptr<gko::Executor> &sub_executor);
-
-    bool is_finalized() const;
-
-    bool is_initialized() const;
-
-    void destroy();
-
-    MpiExecutor(std::initializer_list<std::string> sub_exec_list, int num_args,
-                char **args)
-        : num_ranks_(1),
-          num_args_(num_args),
-          args_(args),
-          sub_exec_list_(sub_exec_list)
-    {
-        this->mpi_init();
-        num_ranks_ = this->get_num_ranks();
-        root_rank_ = 0;
-        this->create_sub_executors(sub_exec_list_, sub_executor_);
-    }
-
-private:
-    int num_ranks_;
-    int num_args_;
-    int root_rank_;
-    int required_thread_support_;
-    int provided_thread_support_;
-    char **args_;
-    std::vector<std::string> sub_exec_list_;
-    std::shared_ptr<Executor> sub_executor_;
-
-    MPI_Comm mpi_comm_;
-    template <typename T>
-    using status_manager = std::unique_ptr<T, std::function<void(T *)>>;
-    status_manager<MPI_Status> mpi_status_;
-
-    std::unique_ptr<mpi_exec_info> exec_info_;
-    std::shared_ptr<MemorySpace> mem_space_instance_;
-};
-
-
-namespace kernels {
-namespace mpi {
-using DefaultExecutor = MpiExecutor;
-}  // namespace mpi
-}  // namespace kernels
-
-
 /**
  * This is a specialization of the OmpExecutor, which runs the reference
  * implementations of the kernels used for debugging purposes.
@@ -1569,6 +1368,198 @@ namespace kernels {
 namespace hip {
 using DefaultExecutor = HipExecutor;
 }  // namespace hip
+}  // namespace kernels
+
+
+namespace mpi {
+
+enum class op_type {
+    sum = 1,
+    min = 2,
+    max = 3,
+    product = 4,
+    custom = 5,
+    logical_and = 6,
+    bitwise_and = 7,
+    logical_or = 8,
+    bitwise_or = 9,
+    logical_xor = 10,
+    bitwise_xor = 11,
+    max_val_and_loc = 12,
+    min_val_and_loc = 13
+};
+
+}
+
+
+/**
+ * This is the Executor subclass which represents the MPI device
+ * (typically CPU).
+ *
+ * @ingroup exec_mpi
+ * @ingroup Executor
+ */
+class MpiExecutor : public detail::ExecutorBase<MpiExecutor>,
+                    public std::enable_shared_from_this<MpiExecutor>,
+                    public machine_config::topology<MpiExecutor> {
+    friend class detail::ExecutorBase<MpiExecutor>;
+
+public:
+    using mpi_exec_info = machine_config::topology<MpiExecutor>;
+    template <typename T>
+    using request_manager = std::unique_ptr<T, std::function<void(T *)>>;
+
+    /**
+     * Creates a new MpiExecutor.
+     */
+    static std::shared_ptr<MpiExecutor> create(
+        std::shared_ptr<Executor> sub_executor, int num_args = 0,
+        char **args = nullptr);
+
+    std::shared_ptr<Executor> get_master() noexcept override;
+
+    std::shared_ptr<const Executor> get_master() const noexcept override;
+
+    std::shared_ptr<Executor> get_sub_executor() noexcept override;
+
+    std::shared_ptr<const Executor> get_sub_executor() const noexcept override;
+
+    void run(const Operation &op) const override
+    {
+        this->template log<log::Logger::operation_launched>(this, &op);
+        op.run(std::static_pointer_cast<const MpiExecutor>(
+            this->shared_from_this()));
+        this->template log<log::Logger::operation_completed>(this, &op);
+    }
+
+    int get_num_ranks() const;
+
+    int get_my_rank() const;
+
+    MPI_Comm get_communicator() const { return mpi_comm_; }
+
+    void set_root_rank(int rank) { root_rank_ = rank; }
+
+    int get_root_rank() const { return root_rank_; }
+
+    std::shared_ptr<MemorySpace> get_mem_space() noexcept override;
+
+    std::shared_ptr<const MemorySpace> get_mem_space() const noexcept override;
+
+    void synchronize() const override;
+
+    void synchronize_communicator(MPI_Comm &comm) const;
+
+    MPI_Comm create_communicator(MPI_Comm &comm, int color, int key);
+
+    // MPI_Op create_operation(
+    //     std::function<void(void *, void *, int *, MPI_Datatype *)> func,
+    //     void *arg1, void *arg2, int *len, MPI_Datatype *type);
+
+    request_manager<MPI_Request> create_requests_array(int size);
+
+    /**
+     * Get the Executor information for this executor
+     *
+     * @return the executor info (mpi_exec_info*) for this executor
+     */
+    mpi_exec_info *get_exec_info() const { return exec_info_.get(); }
+
+    // MPI_Send
+    template <typename SendType>
+    void send(const SendType *send_buffer, const int send_count,
+              const int destination_rank, const int send_tag,
+              bool non_blocking = false);
+
+    // MPI_Recv
+    template <typename RecvType>
+    void recv(RecvType *recv_buffer, const int recv_count,
+              const int source_rank, const int recv_tag,
+              bool non_blocking = false);
+
+    // MPI_Gather
+    template <typename SendType, typename RecvType>
+    void gather(const SendType *send_buffer, const int send_count,
+                RecvType *recv_buffer, const int recv_count, int root_rank);
+
+    // MPI_Gatherv
+    template <typename SendType, typename RecvType>
+    void gather(const SendType *send_buffer, const int send_count,
+                RecvType *recv_buffer, const int *recv_counts,
+                const int *displacements, int root_rank);
+
+    // MPI_Scatter
+    template <typename SendType, typename RecvType>
+    void scatter(const SendType *send_buffer, const int send_count,
+                 RecvType *recv_buffer, const int recv_count, int root_rank);
+
+    // MPI_Scatterv
+    template <typename SendType, typename RecvType>
+    void scatter(const SendType *send_buffer, const int *send_counts,
+                 const int *displacements, RecvType *recv_buffer,
+                 const int recv_count, int root_rank);
+
+    // MPI_Bcast
+    template <typename BroadcastType>
+    void broadcast(BroadcastType *buffer, int count, int root_rank);
+
+    // MPI_Reduce
+    template <typename ReduceType>
+    void reduce(const ReduceType *send_buffer, ReduceType *recv_buffer,
+                int count, mpi::op_type op_enum, int root_rank,
+                bool non_blocking = false);
+
+    // MPI_Allreduce
+    template <typename ReduceType>
+    void all_reduce(const ReduceType *send_buffer, ReduceType *recv_buffer,
+                    int count, mpi::op_type op_enum, bool non_blocking = false);
+
+protected:
+    MpiExecutor() = delete;
+
+    void mpi_init();
+
+    bool is_finalized() const;
+
+    bool is_initialized() const;
+
+    void destroy();
+
+    MpiExecutor(std::shared_ptr<gko::Executor> sub_executor, int num_args,
+                char **args)
+        : num_ranks_(1),
+          num_args_(num_args),
+          args_(args),
+          sub_executor_(sub_executor)
+    {
+        this->mpi_init();
+        num_ranks_ = this->get_num_ranks();
+        root_rank_ = 0;
+    }
+
+private:
+    int num_ranks_;
+    int num_args_;
+    int root_rank_;
+    int required_thread_support_;
+    int provided_thread_support_;
+    char **args_;
+    // std::vector<std::string> sub_exec_list_;
+    std::shared_ptr<Executor> sub_executor_;
+
+    MPI_Comm mpi_comm_;
+    template <typename T>
+    using status_manager = std::unique_ptr<T, std::function<void(T *)>>;
+    status_manager<MPI_Status> mpi_status_;
+
+    std::unique_ptr<mpi_exec_info> exec_info_;
+};
+
+
+namespace kernels {
+namespace mpi {
+using DefaultExecutor = MpiExecutor;
+}  // namespace mpi
 }  // namespace kernels
 
 
