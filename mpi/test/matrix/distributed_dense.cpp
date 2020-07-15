@@ -620,8 +620,8 @@ TYPED_TEST(DistributedDense, CanCompute2Norm)
         gko::Array<value_type>::view(this->sub_exec, nelems, vec1_data), 2);
     vec1->compute_norm2(res1.get());
 
-    EXPECT_EQ(res1->at(0, 0), T_nc{std::sqrt(68.25)});
-    EXPECT_EQ(res1->at(0, 1), T_nc{std::sqrt(21.25)});
+    EXPECT_EQ(res1->at(0, 0), T_nc(std::sqrt(68.25)));
+    EXPECT_EQ(res1->at(0, 1), T_nc(std::sqrt(21.25)));
     delete vec1_data;
 }
 
