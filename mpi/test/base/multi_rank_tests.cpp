@@ -63,7 +63,7 @@ protected:
     {
         char **argv;
         int argc = 0;
-        mpi_exec = gko::MpiExecutor::create(gko::OmpExecutor::create());
+        mpi_exec = gko::MpiExecutor::create(gko::ReferenceExecutor::create());
         sub_exec = mpi_exec->get_sub_executor();
         rank = mpi_exec->get_my_rank();
         ASSERT_GT(mpi_exec->get_num_ranks(), 1);

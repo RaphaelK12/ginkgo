@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.9)
+cmake_minimum_required(VERSION 3.10)
 
 # Use *_ROOT environment variables for find_package calls
 if (CMAKE_VERSION VERSION_GREATER_EQUAL 3.12)

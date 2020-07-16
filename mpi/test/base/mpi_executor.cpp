@@ -55,7 +55,7 @@ protected:
     {
         char **argv;
         int argc = 0;
-        mpi = gko::MpiExecutor::create(gko::OmpExecutor::create());
+        mpi = gko::MpiExecutor::create(gko::ReferenceExecutor::create());
     }
 
     void TearDown()
@@ -94,8 +94,8 @@ TEST_F(MpiExecutor, KnowsItsSubExecutors)
     auto omp = gko::OmpExecutor::create();
     auto ref = gko::ReferenceExecutor::create();
 
-    EXPECT_EQ(typeid(*(omp.get())).name(), typeid(*(sub_exec.get())).name());
-    EXPECT_NE(typeid(*(ref.get())).name(), typeid(*(sub_exec.get())).name());
+    EXPECT_NE(typeid(*(omp.get())).name(), typeid(*(sub_exec.get())).name());
+    EXPECT_EQ(typeid(*(ref.get())).name(), typeid(*(sub_exec.get())).name());
 }
 
 
