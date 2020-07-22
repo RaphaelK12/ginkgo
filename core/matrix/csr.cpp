@@ -91,14 +91,14 @@ void Csr<ValueType, IndexType>::apply_impl(const LinOp *b, LinOp *x) const
 {
     using Dense = Dense<ValueType>;
     using TCsr = Csr<ValueType, IndexType>;
+    auto exec = this->get_executor()->get_sub_executor();
     if (auto b_csr = dynamic_cast<const TCsr *>(b)) {
         // if b is a CSR matrix, we compute a SpGeMM
         auto x_csr = as<TCsr>(x);
-        this->get_executor()->run(csr::make_spgemm(this, b_csr, x_csr));
+        exec->run(csr::make_spgemm(this, b_csr, x_csr));
     } else {
         // otherwise we assume that b is dense and compute a SpMV/SpMM
-        this->get_executor()->run(
-            csr::make_spmv(this, as<Dense>(b), as<Dense>(x)));
+        exec->run(csr::make_spmv(this, as<Dense>(b), as<Dense>(x)));
     }
 }
 
@@ -109,24 +109,24 @@ void Csr<ValueType, IndexType>::apply_impl(const LinOp *alpha, const LinOp *b,
 {
     using Dense = Dense<ValueType>;
     using TCsr = Csr<ValueType, IndexType>;
+    auto exec = this->get_executor()->get_sub_executor();
     if (auto b_csr = dynamic_cast<const TCsr *>(b)) {
         // if b is a CSR matrix, we compute a SpGeMM
         auto x_csr = as<TCsr>(x);
         auto x_copy = x_csr->clone();
-        this->get_executor()->run(
-            csr::make_advanced_spgemm(as<Dense>(alpha), this, b_csr,
-                                      as<Dense>(beta), x_copy.get(), x_csr));
+        exec->run(csr::make_advanced_spgemm(as<Dense>(alpha), this, b_csr,
+                                            as<Dense>(beta), x_copy.get(),
+                                            x_csr));
     } else if (dynamic_cast<const Identity<ValueType> *>(b)) {
         // if b is an identity matrix, we compute an SpGEAM
         auto x_csr = as<TCsr>(x);
         auto x_copy = x_csr->clone();
-        this->get_executor()->run(csr::make_spgeam(
-            as<Dense>(alpha), this, as<Dense>(beta), lend(x_copy), x_csr));
+        exec->run(csr::make_spgeam(as<Dense>(alpha), this, as<Dense>(beta),
+                                   lend(x_copy), x_csr));
     } else {
         // otherwise we assume that b is dense and compute a SpMV/SpMM
-        this->get_executor()->run(
-            csr::make_advanced_spmv(as<Dense>(alpha), this, as<Dense>(b),
-                                    as<Dense>(beta), as<Dense>(x)));
+        exec->run(csr::make_advanced_spmv(as<Dense>(alpha), this, as<Dense>(b),
+                                          as<Dense>(beta), as<Dense>(x)));
     }
 }
 
