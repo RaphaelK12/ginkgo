@@ -65,7 +65,7 @@ protected:
     using ComplexVec = gko::matrix::Dense<std::complex<double>>;
     using ComplexMtx = gko::matrix::Csr<std::complex<double>>;
 
-    Csr() : mtx_size(256, 256), rand_engine(132) {}
+    Csr() : mtx_size(436, 523), rand_engine(132) {}
 
     void SetUp()
     {
@@ -378,9 +378,9 @@ TEST_F(Csr, AdvancedApplyToCsrMatrixIsEquivalentToRef)
 }
 
 
-TEST_F(Csr, SimpleApplyToCsrMatrixIsEquivalentToRef)
+TEST_F(Csr, SimpleApplySparselibToCsrMatrixIsEquivalentToRef)
 {
-    set_up_apply_data(std::make_shared<Mtx::automatical>());
+    set_up_apply_data(std::make_shared<Mtx::sparselib>());
     auto trans = mtx->transpose();
     auto d_trans = dmtx->transpose();
 
@@ -393,9 +393,56 @@ TEST_F(Csr, SimpleApplyToCsrMatrixIsEquivalentToRef)
 }
 
 
-TEST_F(Csr, SimpleApplyToSparseCsrMatrixIsEquivalentToRef)
+TEST_F(Csr, SimpleApplyClassicalToCsrMatrixIsEquivalentToRef)
 {
-    set_up_apply_data(std::make_shared<Mtx::automatical>());
+    set_up_apply_data(std::make_shared<Mtx::classical>());
+    auto trans = mtx->transpose();
+    auto d_trans = dmtx->transpose();
+
+    mtx->apply(trans.get(), square_mtx.get());
+    dmtx->apply(d_trans.get(), square_dmtx.get());
+
+    GKO_ASSERT_MTX_EQ_SPARSITY(square_dmtx, square_mtx);
+    GKO_ASSERT_MTX_NEAR(square_dmtx, square_mtx, 1e-14);
+    ASSERT_TRUE(square_dmtx->is_sorted_by_column_index());
+}
+
+
+TEST_F(Csr, SimpleApplyLoadBalanceToCsrMatrixIsEquivalentToRef)
+{
+    set_up_apply_data(std::make_shared<Mtx::load_balance>());
+    auto trans = mtx->transpose();
+    auto d_trans = dmtx->transpose();
+
+    mtx->apply(trans.get(), square_mtx.get());
+    dmtx->apply(d_trans.get(), square_dmtx.get());
+
+    GKO_ASSERT_MTX_EQ_SPARSITY(square_dmtx, square_mtx);
+    GKO_ASSERT_MTX_NEAR(square_dmtx, square_mtx, 1e-14);
+    ASSERT_TRUE(square_dmtx->is_sorted_by_column_index());
+}
+
+
+TEST_F(Csr, SimpleApplyClassicalToSparseCsrMatrixIsEquivalentToRef)
+{
+    set_up_apply_data(std::make_shared<Mtx::classical>());
+    auto mtx2 =
+        gen_mtx<Mtx>(mtx->get_size()[1], square_mtx->get_size()[1], 0, 10);
+    auto dmtx2 = Mtx::create(cuda, mtx2->get_size());
+    dmtx2->copy_from(mtx2.get());
+
+    mtx->apply(mtx2.get(), square_mtx.get());
+    dmtx->apply(dmtx2.get(), square_dmtx.get());
+
+    GKO_ASSERT_MTX_EQ_SPARSITY(square_dmtx, square_mtx);
+    GKO_ASSERT_MTX_NEAR(square_dmtx, square_mtx, 1e-14);
+    ASSERT_TRUE(square_dmtx->is_sorted_by_column_index());
+}
+
+
+TEST_F(Csr, SimpleApplyLoadBalanceToSparseCsrMatrixIsEquivalentToRef)
+{
+    set_up_apply_data(std::make_shared<Mtx::load_balance>());
     auto mtx2 =
         gen_mtx<Mtx>(mtx->get_size()[1], square_mtx->get_size()[1], 0, 10);
     auto dmtx2 = Mtx::create(cuda, mtx2->get_size());
