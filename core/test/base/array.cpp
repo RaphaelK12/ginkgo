@@ -118,6 +118,18 @@ TYPED_TEST(Array, CanBeCreatedFromDataOnExecutor)
 }
 
 
+TYPED_TEST(Array, CanBeFilledWithAValue)
+{
+    gko::Array<TypeParam> a{this->exec, gko::size_type(4), TypeParam{3}};
+
+    EXPECT_EQ(a.get_num_elems(), 4);
+    EXPECT_EQ(a.get_const_data()[0], TypeParam{3});
+    EXPECT_EQ(a.get_const_data()[1], TypeParam{3});
+    EXPECT_EQ(a.get_const_data()[2], TypeParam{3});
+    EXPECT_EQ(a.get_const_data()[3], TypeParam{3});
+}
+
+
 TYPED_TEST(Array, CanBeCreatedFromRange)
 {
     using std::begin;

@@ -227,6 +227,25 @@ public:
     {}
 
     /**
+     * Creates an array on the specified Executor and initializes it with
+     * values.
+     *
+     * @tparam T  type of values used to initialize the array (T has to be
+     *            implicitly convertible to value_type)
+     *
+     * @param exec  the Executor where the array data will be allocated
+     * @param init_list  list of values used to initialize the Array
+     */
+    explicit Array(std::shared_ptr<const Executor> exec, size_type num_elems,
+                   const value_type &value)
+        : Array(exec)
+    {
+        Array tmp(exec->get_master(), num_elems);
+        std::fill_n(tmp.get_data(), num_elems, value);
+        *this = std::move(tmp);
+    }
+
+    /**
      * Creates a copy of another array on a different executor.
      *
      * This does not invoke the constructors of the elements, instead they are
