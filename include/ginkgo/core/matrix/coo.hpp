@@ -76,6 +76,7 @@ class CooBuilder;
 template <typename ValueType = default_precision, typename IndexType = int32>
 class Coo : public EnableLinOp<Coo<ValueType, IndexType>>,
             public EnableCreateMethod<Coo<ValueType, IndexType>>,
+            public EnableDistributedCreateMethod<Coo<ValueType, IndexType>>,
             public ConvertibleTo<Coo<next_precision<ValueType>, IndexType>>,
             public ConvertibleTo<Csr<ValueType, IndexType>>,
             public ConvertibleTo<Dense<ValueType>>,
@@ -83,6 +84,7 @@ class Coo : public EnableLinOp<Coo<ValueType, IndexType>>,
             public ReadableFromMatrixData<ValueType, IndexType>,
             public WritableToMatrixData<ValueType, IndexType> {
     friend class EnableCreateMethod<Coo>;
+    friend class EnableDistributedCreateMethod<Coo>;
     friend class EnablePolymorphicObject<Coo, LinOp>;
     friend class Csr<ValueType, IndexType>;
     friend class Dense<ValueType>;
@@ -296,6 +298,90 @@ protected:
     {
         GKO_ASSERT_EQ(values_.get_num_elems(), col_idxs_.get_num_elems());
         GKO_ASSERT_EQ(values_.get_num_elems(), row_idxs_.get_num_elems());
+    }
+
+    template <typename ExecType, typename ValuesArray, typename ColIdxsArray,
+              typename RowIdxsArray>
+    static std::unique_ptr<Coo> distribute_data_impl(
+        ExecType &exec, const dim<2> &global_size, const dim<2> &local_size,
+        Array<size_type> &rows, ValuesArray &&values, ColIdxsArray &&col_idxs,
+        RowIdxsArray &&row_idxs)
+    {
+        using itype = index_type;
+        rows.set_executor(exec->get_master());
+        auto mpi_exec = as<gko::MpiExecutor>(exec.get());
+        auto sub_exec = exec->get_sub_executor();
+        auto num_ranks = mpi_exec->get_num_ranks();
+        auto my_rank = mpi_exec->get_my_rank();
+        auto root_rank = mpi_exec->get_root_rank();
+        itype num_rows = rows.get_num_elems();
+        // Can also be the last element of the row_idx array as we sort the
+        // row_idxs by row
+        itype total_num_rows = global_size[0];
+        itype total_num_nnz = row_idxs.get_num_elems();
+        mpi_exec->broadcast(&total_num_nnz, 1, root_rank);
+        auto row_ptrs = Array<itype>{sub_exec->get_master()};
+        row_idxs.set_executor(exec->get_master());
+        if (my_rank == root_rank) {
+            row_ptrs = Array<itype>(sub_exec->get_master(), total_num_rows + 1);
+            std::fill(row_ptrs.get_data(),
+                      row_ptrs.get_data() + total_num_rows + 1, 0);
+            std::for_each(row_idxs.get_const_data(),
+                          row_idxs.get_const_data() + total_num_nnz,
+                          [&](size_type v) {
+                              if (v + 1 < total_num_rows + 1) {
+                                  ++row_ptrs.get_data()[v + 1];
+                              }
+                          });
+            std::partial_sum(row_ptrs.get_data(),
+                             row_ptrs.get_data() + total_num_rows + 1,
+                             row_ptrs.get_data());
+        }
+        row_idxs.set_executor(exec);
+        auto row_set = gko::IndexSet<itype>(total_num_rows);
+        row_set.add_indices(rows.get_const_data(),
+                            rows.get_const_data() + num_rows);
+
+        // TODO: Can possibly be moved to the exec instead of master.
+        auto nnz_per_row = Array<itype>{sub_exec->get_master()};
+        auto row_ptr_clone = Array<itype>{sub_exec->get_master()};
+        if (my_rank == root_rank) {
+            row_ptr_clone =
+                Array<itype>(sub_exec->get_master(), row_ptrs.get_data() + 1,
+                             row_ptrs.get_data() + 1 + total_num_rows);
+            nnz_per_row =
+                Array<itype>(sub_exec->get_master(), row_ptrs.get_data() + 1,
+                             row_ptrs.get_data() + 1 + total_num_rows);
+            std::adjacent_difference(nnz_per_row.get_data(),
+                                     nnz_per_row.get_data() + total_num_rows,
+                                     nnz_per_row.get_data());
+        }
+        auto num_nnz_per_row =
+            nnz_per_row.distribute_data(exec->get_master(), row_set);
+        auto row_start =
+            row_ptr_clone.distribute_data(exec->get_master(), row_set);
+        auto updated_size = local_size;
+        auto max_index_size = std::max_element(
+            rows.get_const_data(), rows.get_const_data() + num_rows);
+        auto index_set =
+            gko::IndexSet<itype>{(*max_index_size + 1) * local_size[1]};
+        for (auto i = 0; i < num_rows; ++i) {
+            index_set.add_subset(row_start.get_const_data()[i] -
+                                     num_nnz_per_row.get_const_data()[i],
+                                 row_start.get_const_data()[i]);
+        }
+        auto updated_values = values.distribute_data(exec, index_set);
+        auto updated_col_idxs = col_idxs.distribute_data(exec, index_set);
+        auto updated_row_idxs = row_idxs.distribute_data(exec, index_set);
+        return Coo::create(exec, updated_size, updated_values, updated_col_idxs,
+                           updated_row_idxs);
+    }
+
+    template <typename ExecType>
+    static std::unique_ptr<Coo> distribute_data_impl(ExecType &exec,
+                                                     const dim<2> &size)
+    {
+        return Coo::create(exec, size);
     }
 
     void apply_impl(const LinOp *b, LinOp *x) const override;
