@@ -81,6 +81,7 @@ set(GINKGO_HIP_AMDGPU "" CACHE STRING
   "The amdgpu_target(s) variable passed to hipcc. The default is none (auto).")
 option(GINKGO_JACOBI_FULL_OPTIMIZATIONS "Use all the optimizations for the CUDA Jacobi algorithm" OFF)
 option(BUILD_SHARED_LIBS "Build shared (.so, .dylib, .dll) libraries" ON)
+option(MPI_RUN_AS_ROOT "Allow MPI to run as root user, necessary within docker containers, not recommended otherwise" OFF)
 
 set(GINKGO_CIRCULAR_DEPS_FLAGS "-Wl,--no-undefined")
 
