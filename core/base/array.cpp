@@ -175,7 +175,7 @@ Array<ValueType> Array<ValueType>::distribute_data(
                      recv_count_array.get_const_data(), displ.get_const_data(),
                      root_rank);
 
-    auto distributed_array = Array{exec, index_set.get_num_elems()};
+    auto distributed_array = Array<ValueType>{exec, index_set.get_num_elems()};
     auto req_array =
         mpi_exec->create_requests_array(num_ranks * total_num_subsets);
     auto idx = 0;
@@ -187,8 +187,8 @@ Array<ValueType> Array<ValueType>::distribute_data(
                     auto offset = offset_array.get_data()[idx];
                     auto g_n_elems =
                         global_num_elems_subset_array.get_data()[idx];
-                    mpi_exec->send(&data_.get()[offset], g_n_elems, in_rank,
-                                   tags.get_data()[idx]);
+                    mpi_exec->send(&(this->get_const_data()[offset]), g_n_elems,
+                                   in_rank, tags.get_data()[idx]);
                     idx++;
                 }
             }
@@ -206,7 +206,8 @@ Array<ValueType> Array<ValueType>::distribute_data(
         } else {
             distributed_array.get_executor()->get_mem_space()->copy_from(
                 sub_exec->get_mem_space().get(), n_elems,
-                &data_.get()[start_idx], &distributed_array.get_data()[offset]);
+                &(this->get_const_data()[start_idx]),
+                &distributed_array.get_data()[offset]);
         }
         offset += n_elems;
     }

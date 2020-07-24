@@ -75,7 +75,7 @@ using ValueIndexTypes = ::testing::Types<
     std::tuple<std::complex<double>, gko::int64>>;
 
 
-using DebugValueIndexTypes = ::testing::Types<std::tuple<double, gko::int32>>;
+using DebugValueIndexType = ::testing::Types<std::tuple<float, gko::int32>>;
 
 
 using RealValueIndexTypes = ::testing::Types<

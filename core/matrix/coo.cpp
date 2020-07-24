@@ -73,7 +73,8 @@ template <typename ValueType, typename IndexType>
 void Coo<ValueType, IndexType>::apply_impl(const LinOp *b, LinOp *x) const
 {
     using Dense = Dense<ValueType>;
-    this->get_executor()->run(coo::make_spmv(this, as<Dense>(b), as<Dense>(x)));
+    auto exec = this->get_executor()->get_sub_executor();
+    exec->run(coo::make_spmv(this, as<Dense>(b), as<Dense>(x)));
 }
 
 
@@ -82,8 +83,9 @@ void Coo<ValueType, IndexType>::apply_impl(const LinOp *alpha, const LinOp *b,
                                            const LinOp *beta, LinOp *x) const
 {
     using Dense = Dense<ValueType>;
-    this->get_executor()->run(coo::make_advanced_spmv(
-        as<Dense>(alpha), this, as<Dense>(b), as<Dense>(beta), as<Dense>(x)));
+    auto exec = this->get_executor()->get_sub_executor();
+    exec->run(coo::make_advanced_spmv(as<Dense>(alpha), this, as<Dense>(b),
+                                      as<Dense>(beta), as<Dense>(x)));
 }
 
 
@@ -91,8 +93,8 @@ template <typename ValueType, typename IndexType>
 void Coo<ValueType, IndexType>::apply2_impl(const LinOp *b, LinOp *x) const
 {
     using Dense = Dense<ValueType>;
-    this->get_executor()->run(
-        coo::make_spmv2(this, as<Dense>(b), as<Dense>(x)));
+    auto exec = this->get_executor()->get_sub_executor();
+    exec->run(coo::make_spmv2(this, as<Dense>(b), as<Dense>(x)));
 }
 
 
@@ -101,8 +103,9 @@ void Coo<ValueType, IndexType>::apply2_impl(const LinOp *alpha, const LinOp *b,
                                             LinOp *x) const
 {
     using Dense = Dense<ValueType>;
-    this->get_executor()->run(coo::make_advanced_spmv2(
-        as<Dense>(alpha), this, as<Dense>(b), as<Dense>(x)));
+    auto exec = this->get_executor()->get_sub_executor();
+    exec->run(coo::make_advanced_spmv2(as<Dense>(alpha), this, as<Dense>(b),
+                                       as<Dense>(x)));
 }
 
 
