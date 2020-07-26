@@ -645,6 +645,60 @@ std::unique_ptr<Matrix> initialize(
     return mtx;
 }
 
+
+/**
+ * Creates , initializes and distributes a column-vector.
+ *
+ * This function first creates a temporary Dense matrix, fills it with passed in
+ * values, and then converts the matrix to the requested type.
+ *
+ * @tparam Matrix  matrix type to initialize
+ *                 (Dense has to implement the ConvertibleTo<Matrix> interface)
+ * @tparam TArgs  argument types for Matrix::create method
+ *                (not including the implied Executor as the first argument)
+ *
+ * @param stride  row stride for the temporary Dense matrix
+ * @param row_dist  row distribution local the the ranks
+ * @param vals  values used to initialize the vector
+ * @param exec  Executor associated to the vector
+ * @param create_args  additional arguments passed to Matrix::create, not
+ *                     including the Executor, which is passed as the first
+ *                     argument
+ *
+ * @ingroup LinOp
+ * @ingroup mat_formats
+ */
+template <typename Matrix, typename... TArgs>
+std::unique_ptr<Matrix> initialize_and_distribute(
+    size_type stride, const Array<size_type> &row_dist,
+    std::initializer_list<typename Matrix::value_type> vals,
+    std::shared_ptr<const Executor> exec, TArgs &&... create_args)
+{
+    using dense = matrix::Dense<typename Matrix::value_type>;
+    GKO_ASSERT_MPI_EXEC(exec.get());
+    auto mpi_exec = as<gko::MpiExecutor>(exec.get());
+    auto num_ranks = mpi_exec->get_num_ranks();
+    auto my_rank = mpi_exec->get_my_rank();
+    size_type num_rows = row_dist.get_num_elems();
+    auto tmp = dense::create(mpi_exec->get_sub_executor()->get_master(),
+                             dim<2>{num_rows, 1}, stride);
+    size_type idx = 0;
+    size_type l_idx = 0;
+    for (const auto &elem : vals) {
+        if (std::find(row_dist.get_const_data(),
+                      row_dist.get_const_data() + num_rows,
+                      idx) != (row_dist.get_const_data() + num_rows)) {
+            tmp->at(l_idx) = elem;
+            ++l_idx;
+        }
+        ++idx;
+    }
+    auto mtx = Matrix::create(mpi_exec->get_sub_executor(),
+                              std::forward<TArgs>(create_args)...);
+    tmp->move_to(mtx.get());
+    return mtx;
+}
+
 /**
  * Creates and initializes a column-vector.
  *
@@ -725,6 +779,66 @@ std::unique_ptr<Matrix> initialize(
 
 
 /**
+ * Creates and initializes and distributes a matrix.
+ *
+ * This function first creates a temporary Dense matrix, fills it with passed in
+ * values, and then converts the matrix to the requested type.
+ *
+ * @tparam Matrix  matrix type to initialize
+ *                 (Dense has to implement the ConvertibleTo<Matrix> interface)
+ * @tparam TArgs  argument types for Matrix::create method
+ *                (not including the implied Executor as the first argument)
+ *
+ * @param stride  row stride for the temporary Dense matrix
+ * @param row_dist  row distribution local the the ranks
+ * @param vals  values used to initialize the matrix
+ * @param exec  Executor associated to the matrix
+ * @param create_args  additional arguments passed to Matrix::create, not
+ *                     including the Executor, which is passed as the first
+ *                     argument
+ *
+ * @ingroup LinOp
+ * @ingroup mat_formats
+ */
+template <typename Matrix, typename... TArgs>
+std::unique_ptr<Matrix> initialize_and_distribute(
+    size_type stride, const Array<size_type> &row_dist,
+    std::initializer_list<std::initializer_list<typename Matrix::value_type>>
+        vals,
+    std::shared_ptr<const Executor> exec, TArgs &&... create_args)
+{
+    using dense = matrix::Dense<typename Matrix::value_type>;
+    GKO_ASSERT_MPI_EXEC(exec.get());
+    auto mpi_exec = as<gko::MpiExecutor>(exec.get());
+    auto num_ranks = mpi_exec->get_num_ranks();
+    auto my_rank = mpi_exec->get_my_rank();
+    size_type num_rows = row_dist.get_num_elems();
+    size_type num_cols = num_rows > 0 ? begin(vals)->size() : 1;
+    auto tmp = dense::create(mpi_exec->get_sub_executor()->get_master(),
+                             dim<2>{num_rows, num_cols}, stride);
+    size_type ridx = 0;
+    size_type local_ridx = 0;
+    for (const auto &row : vals) {
+        if (std::find(row_dist.get_const_data(),
+                      row_dist.get_const_data() + num_rows,
+                      ridx) != (row_dist.get_const_data() + num_rows)) {
+            size_type cidx = 0;
+            for (const auto &elem : row) {
+                tmp->at(local_ridx, cidx) = elem;
+                ++cidx;
+            }
+            ++local_ridx;
+        }
+        ++ridx;
+    }
+    auto mtx = Matrix::create(mpi_exec->get_sub_executor(),
+                              std::forward<TArgs>(create_args)...);
+    tmp->move_to(mtx.get());
+    return mtx;
+}
+
+
+/**
  * Creates and initializes a matrix.
  *
  * This function first creates a temporary Dense matrix, fills it with passed in
@@ -759,7 +873,7 @@ std::unique_ptr<Matrix> initialize(
 
 
 /**
- * Creates and initializes a distributed matrix.
+ * Creates initializes and distributes a matrix.
  *
  * This function first creates a temporary Dense matrix, fills it with passed in
  * values, and then converts the matrix to the requested type. The stride of
@@ -771,6 +885,7 @@ std::unique_ptr<Matrix> initialize(
  * @tparam TArgs  argument types for Matrix::create method
  *                (not including the implied Executor as the first argument)
  *
+ * @param row_dist  row distribution local the the ranks
  * @param vals  values used to initialize the matrix
  * @param exec  Executor associated to the matrix
  * @param create_args  additional arguments passed to Matrix::create, not
@@ -781,14 +896,15 @@ std::unique_ptr<Matrix> initialize(
  * @ingroup mat_formats
  */
 template <typename Matrix, typename... TArgs>
-std::unique_ptr<Matrix> distributed_initialize(
+std::unique_ptr<Matrix> initialize_and_distribute(
+    const Array<size_type> &row_dist,
     std::initializer_list<std::initializer_list<typename Matrix::value_type>>
         vals,
     std::shared_ptr<const Executor> exec, TArgs &&... create_args)
 {
-    return initialize<Matrix>(vals.size() > 0 ? begin(vals)->size() : 0, vals,
-                              std::move(exec),
-                              std::forward<TArgs>(create_args)...);
+    return initialize_and_distribute<Matrix>(
+        vals.size() > 0 ? begin(vals)->size() : 0, row_dist, vals,
+        std::move(exec), std::forward<TArgs>(create_args)...);
 }
 
 

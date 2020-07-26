@@ -159,6 +159,77 @@ TYPED_TEST(DistributedDense, CanBeConstructedWithSizeAndStride)
 }
 
 
+TYPED_TEST(DistributedDense,
+           ColumnVectorCanBeInitializedWithInitializeAndStride)
+{
+    using Mtx = gko::matrix::Dense<TypeParam>;
+    using value_type = typename TestFixture::value_type;
+    using size_type = gko::size_type;
+    std::shared_ptr<Mtx> local_mtx{};
+    std::shared_ptr<Mtx> dist_mtx{};
+    gko::Array<size_type> row_dist;
+    if (this->rank == 0) {
+        local_mtx = gko::initialize<Mtx>(1, {2, -1.0, 0.0}, this->sub_exec);
+        row_dist = gko::Array<size_type>{this->sub_exec, {0, 1, 2}};
+    } else {
+        local_mtx = gko::initialize<Mtx>(1, {-1.0, 2, -1.0}, this->sub_exec);
+        row_dist = gko::Array<size_type>{this->sub_exec, {3, 4, 5}};
+    }
+
+    dist_mtx = gko::initialize_and_distribute<Mtx>(
+        1, row_dist, {2, -1.0, 0.0, -1.0, 2, -1.0}, this->mpi_exec);
+    this->assert_equal_mtxs(local_mtx.get(), dist_mtx.get());
+}
+
+
+TYPED_TEST(DistributedDense, CanBeInitializedWithInitializeAndStride)
+{
+    using Mtx = gko::matrix::Dense<TypeParam>;
+    using value_type = typename TestFixture::value_type;
+    using size_type = gko::size_type;
+    std::shared_ptr<Mtx> local_mtx{};
+    std::shared_ptr<Mtx> dist_mtx{};
+    gko::Array<size_type> row_dist;
+    if (this->rank == 0) {
+        local_mtx = gko::initialize<Mtx>(3, {{2, -1.0, 0.0}, {0.0, -1.0, 2}},
+                                         this->sub_exec);
+        row_dist = gko::Array<size_type>{this->sub_exec, {0, 2}};
+    } else {
+        local_mtx = gko::initialize<Mtx>(3, {{-1.0, 2, -1.0}}, this->sub_exec);
+        row_dist = gko::Array<size_type>{this->sub_exec, {1}};
+    }
+
+    dist_mtx = gko::initialize_and_distribute<Mtx>(
+        3, row_dist, {{2, -1.0, 0.0}, {-1.0, 2, -1.0}, {0.0, -1.0, 2}},
+        this->mpi_exec);
+    this->assert_equal_mtxs(local_mtx.get(), dist_mtx.get());
+}
+
+
+TYPED_TEST(DistributedDense, CanBeInitializedWithInitializeWithoutStride)
+{
+    using Mtx = gko::matrix::Dense<TypeParam>;
+    using value_type = typename TestFixture::value_type;
+    using size_type = gko::size_type;
+    std::shared_ptr<Mtx> local_mtx{};
+    std::shared_ptr<Mtx> dist_mtx{};
+    gko::Array<size_type> row_dist;
+    if (this->rank == 0) {
+        local_mtx = gko::initialize<Mtx>({{2, -1.0, 0.0}, {0.0, -1.0, 2}},
+                                         this->sub_exec);
+        row_dist = gko::Array<size_type>{this->sub_exec, {0, 2}};
+    } else {
+        local_mtx = gko::initialize<Mtx>({{-1.0, 2, -1.0}}, this->sub_exec);
+        row_dist = gko::Array<size_type>{this->sub_exec, {1}};
+    }
+
+    dist_mtx = gko::initialize_and_distribute<Mtx>(
+        row_dist, {{2, -1.0, 0.0}, {-1.0, 2, -1.0}, {0.0, -1.0, 2}},
+        this->mpi_exec);
+    this->assert_equal_mtxs(local_mtx.get(), dist_mtx.get());
+}
+
+
 TYPED_TEST(DistributedDense, CanBeConstructedFromExistingExecutorData)
 {
     using value_type = typename TestFixture::value_type;
