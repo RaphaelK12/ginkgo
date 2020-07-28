@@ -143,7 +143,7 @@ TYPED_TEST(MultiRankDistribute, CanSimpleDistributeArray)
         lm = gko::Array<value_type>(
             sub_exec, gko::Array<value_type>::view(sub_exec, 7, comp_data));
     }
-    m = orig_array.distribute_data(this->mpi_exec, index_set);
+    m = orig_array.distribute(this->mpi_exec, index_set);
     ASSERT_EQ(m.get_executor(), this->mpi_exec);
     this->assert_equal_arrays(m, lm);
     if (this->rank == 0) {
@@ -199,7 +199,7 @@ TYPED_TEST(MultiRankDistribute, CanDistributeArrayNonContiguous)
         lm = gko::Array<value_type>(
             sub_exec, gko::Array<value_type>::view(sub_exec, 9, comp_data));
     }
-    m = orig_array.distribute_data(this->mpi_exec, index_set);
+    m = orig_array.distribute(this->mpi_exec, index_set);
     ASSERT_EQ(m.get_executor(), this->mpi_exec);
     this->assert_equal_arrays(m, lm);
     if (this->rank == 0) {

@@ -503,8 +503,15 @@ public:
      * Distributes the array according to the given index set.
      */
     template <typename IndexType>
-    Array distribute_data(std::shared_ptr<gko::Executor> exec,
-                          const IndexSet<IndexType> &index_set);
+    Array distribute(std::shared_ptr<gko::Executor> exec,
+                     const IndexSet<IndexType> &index_set);
+
+    /**
+     * Gathers the array according to the given index set.
+     */
+    template <typename IndexType>
+    Array gather(std::shared_ptr<gko::Executor> exec,
+                 const IndexSet<IndexType> &index_set);
 
     /**
      * Computes the sqrt of each element in the array.

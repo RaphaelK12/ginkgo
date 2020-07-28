@@ -672,11 +672,10 @@ public:
 
 
     template <typename ExecType, typename... Args>
-    static std::unique_ptr<ConcreteType> distribute_data(ExecType &exec,
-                                                         Args &&... args)
+    static std::unique_ptr<ConcreteType> distribute(ExecType &exec,
+                                                    Args &&... args)
     {
-        return ConcreteType::distribute_data_impl(exec,
-                                                  std::forward<Args>(args)...);
+        return ConcreteType::distribute_impl(exec, std::forward<Args>(args)...);
     }
 
     template <typename ExecType, typename... Args>
@@ -684,7 +683,7 @@ public:
                                                                Args &&... args)
     {
         GKO_ASSERT_MPI_EXEC(exec.get());
-        return distribute_data(exec, args...);
+        return distribute(exec, args...);
     }
 };
 

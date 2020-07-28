@@ -146,7 +146,7 @@ TYPED_TEST(DistributedArray, CanDistributeArray)
         lm = gko::Array<value_type>(
             sub_exec, gko::Array<value_type>::view(sub_exec, 12, comp_data));
     }
-    m = orig_array.distribute_data(this->mpi_exec, index_set);
+    m = orig_array.distribute(this->mpi_exec, index_set);
     ASSERT_EQ(m.get_executor(), this->mpi_exec);
     this->assert_equal_arrays(m, lm);
     if (this->rank == 0) {
@@ -188,7 +188,7 @@ TYPED_TEST(DistributedArray, CanDistributeNonContiguousArrays)
         lm = gko::Array<TypeParam>(
             sub_exec, gko::Array<value_type>::view(sub_exec, 10, comp_data));
     }
-    m = orig_array.distribute_data(this->mpi_exec, index_set);
+    m = orig_array.distribute(this->mpi_exec, index_set);
     ASSERT_EQ(m.get_executor(), this->mpi_exec);
     this->assert_equal_arrays(m, lm);
     if (this->rank == 0) {

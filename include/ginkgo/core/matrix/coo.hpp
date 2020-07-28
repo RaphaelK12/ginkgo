@@ -302,7 +302,7 @@ protected:
 
     template <typename ExecType, typename ValuesArray, typename ColIdxsArray,
               typename RowIdxsArray>
-    static std::unique_ptr<Coo> distribute_data_impl(
+    static std::unique_ptr<Coo> distribute_impl(
         ExecType &exec, const dim<2> &global_size, const dim<2> &local_size,
         Array<size_type> &rows, ValuesArray &&values, ColIdxsArray &&col_idxs,
         RowIdxsArray &&row_idxs)
@@ -357,9 +357,8 @@ protected:
                                      nnz_per_row.get_data());
         }
         auto num_nnz_per_row =
-            nnz_per_row.distribute_data(exec->get_master(), row_set);
-        auto row_start =
-            row_ptr_clone.distribute_data(exec->get_master(), row_set);
+            nnz_per_row.distribute(exec->get_master(), row_set);
+        auto row_start = row_ptr_clone.distribute(exec->get_master(), row_set);
         auto updated_size = local_size;
         auto index_set = gko::IndexSet<itype>{size_type(total_num_nnz)};
         for (auto i = 0; i < num_rows; ++i) {
@@ -367,16 +366,16 @@ protected:
                                      num_nnz_per_row.get_const_data()[i],
                                  row_start.get_const_data()[i]);
         }
-        auto updated_values = values.distribute_data(exec, index_set);
-        auto updated_col_idxs = col_idxs.distribute_data(exec, index_set);
-        auto updated_row_idxs = row_idxs.distribute_data(exec, index_set);
+        auto updated_values = values.distribute(exec, index_set);
+        auto updated_col_idxs = col_idxs.distribute(exec, index_set);
+        auto updated_row_idxs = row_idxs.distribute(exec, index_set);
         return Coo::create(exec, updated_size, updated_values, updated_col_idxs,
                            updated_row_idxs);
     }
 
     template <typename ExecType>
-    static std::unique_ptr<Coo> distribute_data_impl(ExecType &exec,
-                                                     const dim<2> &size)
+    static std::unique_ptr<Coo> distribute_impl(ExecType &exec,
+                                                const dim<2> &size)
     {
         return Coo::create(exec, size);
     }

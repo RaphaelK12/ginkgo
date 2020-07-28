@@ -657,6 +657,66 @@ std::unique_ptr<LinOp> Dense<ValueType>::conj_transpose() const
 
 
 template <typename ValueType>
+std::unique_ptr<Dense<ValueType>> Dense<ValueType>::gather_on_root(
+    const Array<size_type> *row_distribution) const
+{
+    auto exec = this->get_executor();
+    GKO_ASSERT_MPI_EXEC(exec.get());
+    auto mpi_exec = gko::as<MpiExecutor>(exec.get());
+    auto sub_exec = exec->get_sub_executor();
+    auto num_ranks = mpi_exec->get_num_ranks();
+    auto my_rank = mpi_exec->get_my_rank();
+    auto root_rank = mpi_exec->get_root_rank();
+
+    // auto mat_size = this->get_size();
+    // auto local_num_rows = row_distribution->get_num_elems();
+    // GKO_ASSERT_CONDITION(mat_size()[0], local_num_rows);
+    // auto global_num_rows = local_num_rows;
+    // mpi_exec->gather(&local_num_rows, 1, &global_num_rows, 1, root_rank);
+    // mpi_exec->broadcast(&global_num_rows, 1, root_rank);
+    // auto gathered_dense = Dense::create(exec);
+    // if (my_rank == root_rank) {
+    //     Dense::create(exec, gko::dim<2>(global_num_rows, mat_size[1]));
+    // }
+    // exec->run(dense::make_transpose(this, trans_cpy.get()));
+
+    // return std::move(trans_cpy);
+    auto gathered_cpy = Dense::create(exec, this->get_size());
+
+    return std::move(gathered_cpy);
+}
+
+
+template <typename ValueType>
+std::unique_ptr<Dense<ValueType>> Dense<ValueType>::gather_on_all(
+    const Array<size_type> *row_distribution) const
+{
+    auto exec = this->get_executor();
+    GKO_ASSERT_MPI_EXEC(exec.get());
+    auto mpi_exec = gko::as<MpiExecutor>(exec.get());
+    auto sub_exec = exec->get_sub_executor();
+    auto num_ranks = mpi_exec->get_num_ranks();
+    auto my_rank = mpi_exec->get_my_rank();
+    auto root_rank = mpi_exec->get_root_rank();
+
+    // auto mat_size = this->get_size();
+    // auto local_num_rows = row_distribution->get_num_elems();
+    // GKO_ASSERT_CONDITION(mat_size()[0], local_num_rows);
+    // auto global_num_rows = local_num_rows;
+    // mpi_exec->gather(&local_num_rows, 1, &global_num_rows, 1, root_rank);
+    // mpi_exec->broadcast(&global_num_rows, 1, root_rank);
+    // auto gathered_dense = Dense::create(exec);
+    // if (my_rank == root_rank) {
+    //     Dense::create(exec, gko::dim<2>(global_num_rows, mat_size[1]));
+    // }
+    // exec->run(dense::make_transpose(this, trans_cpy.get()));
+    auto gathered_cpy = Dense::create(exec, this->get_size());
+
+    return std::move(gathered_cpy);
+}
+
+
+template <typename ValueType>
 std::unique_ptr<LinOp> Dense<ValueType>::row_permute(
     const Array<int32> *permutation_indices) const
 {

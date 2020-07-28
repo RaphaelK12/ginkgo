@@ -907,7 +907,7 @@ protected:
 
     template <typename ExecType, typename ValuesArray, typename ColIdxsArray,
               typename RowPtrsArray>
-    static std::unique_ptr<Csr> distribute_data_impl(
+    static std::unique_ptr<Csr> distribute_impl(
         ExecType &exec, dim<2> &size, Array<size_type> &rows,
         ValuesArray &&values, ColIdxsArray &&col_idxs, RowPtrsArray &&row_ptrs,
         std::shared_ptr<strategy_type> strategy = std::make_shared<sparselib>())
@@ -945,9 +945,8 @@ protected:
                                      nnz_per_row.get_data());
         }
         auto num_nnz_per_row =
-            nnz_per_row.distribute_data(exec->get_master(), row_set);
-        auto row_start =
-            row_ptr_clone.distribute_data(exec->get_master(), row_set);
+            nnz_per_row.distribute(exec->get_master(), row_set);
+        auto row_start = row_ptr_clone.distribute(exec->get_master(), row_set);
         auto updated_row_ptrs =
             Array<itype>(exec, size_type(num_rows + 1), itype(0));
         updated_row_ptrs.set_executor(exec->get_master());
@@ -963,8 +962,8 @@ protected:
                                      num_nnz_per_row.get_const_data()[i],
                                  row_start.get_const_data()[i]);
         }
-        auto updated_values = values.distribute_data(exec, index_set);
-        auto updated_col_idxs = col_idxs.distribute_data(exec, index_set);
+        auto updated_values = values.distribute(exec, index_set);
+        auto updated_col_idxs = col_idxs.distribute(exec, index_set);
         auto updated_strategy = strategy;
         return Csr::create(exec, updated_size, updated_values, updated_col_idxs,
                            updated_row_ptrs, updated_strategy);
@@ -972,15 +971,15 @@ protected:
 
 
     template <typename ExecType>
-    static std::unique_ptr<Csr> distribute_data_impl(ExecType &exec,
-                                                     const dim<2> &size)
+    static std::unique_ptr<Csr> distribute_impl(ExecType &exec,
+                                                const dim<2> &size)
     {
         return Csr::create(exec, size);
     }
 
 
     template <typename ExecType>
-    static std::unique_ptr<Csr> distribute_data_impl(
+    static std::unique_ptr<Csr> distribute_impl(
         ExecType &exec, const dim<2> &size,
         std::shared_ptr<strategy_type> strategy)
     {

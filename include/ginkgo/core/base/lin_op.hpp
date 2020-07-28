@@ -155,8 +155,12 @@ public:
     LinOp *apply(const LinOp *b, LinOp *x)
     {
         this->template log<log::Logger::linop_apply_started>(this, b, x);
-        this->validate_application_parameters(b, x);
-        auto exec = this->get_executor()->get_sub_executor();
+        auto exec = this->get_executor();
+        if (auto chk = dynamic_cast<const gko::MpiExecutor *>(exec.get())) {
+            this->validate_distributed_application_parameters(b, x);
+        } else {
+            this->validate_application_parameters(b, x);
+        }
         this->apply_impl(make_temporary_clone(exec, b).get(),
                          make_temporary_clone(exec, x).get());
         this->template log<log::Logger::linop_apply_completed>(this, b, x);
@@ -169,8 +173,12 @@ public:
     const LinOp *apply(const LinOp *b, LinOp *x) const
     {
         this->template log<log::Logger::linop_apply_started>(this, b, x);
-        this->validate_application_parameters(b, x);
-        auto exec = this->get_executor()->get_sub_executor();
+        auto exec = this->get_executor();
+        if (auto chk = dynamic_cast<const gko::MpiExecutor *>(exec.get())) {
+            this->validate_distributed_application_parameters(b, x);
+        } else {
+            this->validate_application_parameters(b, x);
+        }
         this->apply_impl(make_temporary_clone(exec, b).get(),
                          make_temporary_clone(exec, x).get());
         this->template log<log::Logger::linop_apply_completed>(this, b, x);
@@ -192,8 +200,13 @@ public:
     {
         this->template log<log::Logger::linop_advanced_apply_started>(
             this, alpha, b, beta, x);
-        this->validate_application_parameters(alpha, b, beta, x);
-        auto exec = this->get_executor()->get_sub_executor();
+        auto exec = this->get_executor();
+        if (auto chk = dynamic_cast<const gko::MpiExecutor *>(exec.get())) {
+            this->validate_distributed_application_parameters(alpha, b, beta,
+                                                              x);
+        } else {
+            this->validate_application_parameters(alpha, b, beta, x);
+        }
         this->apply_impl(make_temporary_clone(exec, alpha).get(),
                          make_temporary_clone(exec, b).get(),
                          make_temporary_clone(exec, beta).get(),
@@ -211,8 +224,13 @@ public:
     {
         this->template log<log::Logger::linop_advanced_apply_started>(
             this, alpha, b, beta, x);
-        this->validate_application_parameters(alpha, b, beta, x);
-        auto exec = this->get_executor()->get_sub_executor();
+        auto exec = this->get_executor();
+        if (auto chk = dynamic_cast<const gko::MpiExecutor *>(exec.get())) {
+            this->validate_distributed_application_parameters(alpha, b, beta,
+                                                              x);
+        } else {
+            this->validate_application_parameters(alpha, b, beta, x);
+        }
         this->apply_impl(make_temporary_clone(exec, alpha).get(),
                          make_temporary_clone(exec, b).get(),
                          make_temporary_clone(exec, beta).get(),
@@ -296,6 +314,20 @@ protected:
 
     /**
      * Throws a DimensionMismatch exception if the parameters to `apply` are of
+     * the wrong size for distributed objects.
+     *
+     * @param b  vector(s) on which the operator is applied
+     * @param x  output vector(s)
+     */
+    void validate_distributed_application_parameters(const LinOp *b,
+                                                     const LinOp *x) const
+    {
+        GKO_ASSERT_CONFORMANT(this, b);
+        GKO_ASSERT_EQUAL_COLS(b, x);
+    }
+
+    /**
+     * Throws a DimensionMismatch exception if the parameters to `apply` are of
      * the wrong size.
      *
      * @param alpha  scaling of the result of op(b)
@@ -308,6 +340,25 @@ protected:
                                          const LinOp *x) const
     {
         this->validate_application_parameters(b, x);
+        GKO_ASSERT_EQUAL_DIMENSIONS(alpha, dim<2>(1, 1));
+        GKO_ASSERT_EQUAL_DIMENSIONS(beta, dim<2>(1, 1));
+    }
+
+    /**
+     * Throws a DimensionMismatch exception if the parameters to `apply` are of
+     * the wrong size.
+     *
+     * @param alpha  scaling of the result of op(b)
+     * @param b  vector(s) on which the operator is applied
+     * @param beta  scaling of the input x
+     * @param x  output vector(s)
+     */
+    void validate_distributed_application_parameters(const LinOp *alpha,
+                                                     const LinOp *b,
+                                                     const LinOp *beta,
+                                                     const LinOp *x) const
+    {
+        this->validate_distributed_application_parameters(b, x);
         GKO_ASSERT_EQUAL_DIMENSIONS(alpha, dim<2>(1, 1));
         GKO_ASSERT_EQUAL_DIMENSIONS(beta, dim<2>(1, 1));
     }
@@ -431,6 +482,46 @@ public:
      * @return a pointer to the new conjugate transposed object
      */
     virtual std::unique_ptr<LinOp> conj_transpose() const = 0;
+};
+
+
+/**
+ * Linear operators which support gather in a distributed settings need to
+ * implement Gatherable interface.
+ *
+ * It provides two functionalities, a gather to all ranks and a gather to root
+ *
+ * Example: Gathering a Dense matrix:
+ * ------------------------------------
+ *
+ * ```c++
+ * //Gathering an object of Dense type.
+ * //The object you want to gather.
+ * auto op = matrix::Dense::create(exec);
+ * //Gather the object by first converting it to a Gatherable type.
+ * auto gathered_obj = op->gather_on_root();
+ * ```
+ */
+template <typename ObjType>
+class Gatherable {
+public:
+    virtual ~Gatherable() = default;
+
+    /**
+     * Returns a gathered ObjType of the object on the root.
+     *
+     * @return a pointer to the new gathered object
+     */
+    virtual std::unique_ptr<ObjType> gather_on_root(
+        const Array<size_type> *row_distribution) const = 0;
+
+    /**
+     * Returns a gathered ObjType of the object on all ranks.
+     *
+     * @return a pointer to the new gathered object
+     */
+    virtual std::unique_ptr<ObjType> gather_on_all(
+        const Array<size_type> *row_distribution) const = 0;
 };
 
 
@@ -663,8 +754,12 @@ public:
     const ConcreteLinOp *apply(const LinOp *b, LinOp *x) const
     {
         this->template log<log::Logger::linop_apply_started>(this, b, x);
-        this->validate_application_parameters(b, x);
         auto exec = this->get_executor();
+        if (auto chk = dynamic_cast<const gko::MpiExecutor *>(exec.get())) {
+            this->validate_distributed_application_parameters(b, x);
+        } else {
+            this->validate_application_parameters(b, x);
+        }
         this->apply_impl(make_temporary_clone(exec, b).get(),
                          make_temporary_clone(exec, x).get());
         this->template log<log::Logger::linop_apply_completed>(this, b, x);
@@ -674,8 +769,12 @@ public:
     ConcreteLinOp *apply(const LinOp *b, LinOp *x)
     {
         this->template log<log::Logger::linop_apply_started>(this, b, x);
-        this->validate_application_parameters(b, x);
         auto exec = this->get_executor();
+        if (auto chk = dynamic_cast<const gko::MpiExecutor *>(exec.get())) {
+            this->validate_distributed_application_parameters(b, x);
+        } else {
+            this->validate_application_parameters(b, x);
+        }
         this->apply_impl(make_temporary_clone(exec, b).get(),
                          make_temporary_clone(exec, x).get());
         this->template log<log::Logger::linop_apply_completed>(this, b, x);
@@ -687,8 +786,13 @@ public:
     {
         this->template log<log::Logger::linop_advanced_apply_started>(
             this, alpha, b, beta, x);
-        this->validate_application_parameters(alpha, b, beta, x);
         auto exec = this->get_executor();
+        if (auto chk = dynamic_cast<const gko::MpiExecutor *>(exec.get())) {
+            this->validate_distributed_application_parameters(alpha, b, beta,
+                                                              x);
+        } else {
+            this->validate_application_parameters(alpha, b, beta, x);
+        }
         this->apply_impl(make_temporary_clone(exec, alpha).get(),
                          make_temporary_clone(exec, b).get(),
                          make_temporary_clone(exec, beta).get(),
@@ -703,8 +807,13 @@ public:
     {
         this->template log<log::Logger::linop_advanced_apply_started>(
             this, alpha, b, beta, x);
-        this->validate_application_parameters(alpha, b, beta, x);
         auto exec = this->get_executor();
+        if (auto chk = dynamic_cast<const gko::MpiExecutor *>(exec.get())) {
+            this->validate_distributed_application_parameters(alpha, b, beta,
+                                                              x);
+        } else {
+            this->validate_application_parameters(alpha, b, beta, x);
+        }
         this->apply_impl(make_temporary_clone(exec, alpha).get(),
                          make_temporary_clone(exec, b).get(),
                          make_temporary_clone(exec, beta).get(),
