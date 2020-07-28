@@ -84,7 +84,7 @@ inline void wait(MPI_Request *request, MPI_Status *status)
 
 inline void send(const void *send_buffer, const int send_count,
                  MPI_Datatype &send_type, const int destination_rank,
-                 const int send_tag, MPI_Comm &comm)
+                 const int send_tag, const MPI_Comm &comm)
 {
     GKO_ASSERT_NO_MPI_ERRORS(MPI_Send(send_buffer, send_count, send_type,
                                       destination_rank, send_tag, comm));
@@ -93,7 +93,7 @@ inline void send(const void *send_buffer, const int send_count,
 
 inline void recv(void *recv_buffer, const int recv_count,
                  MPI_Datatype &recv_type, const int source_rank,
-                 const int recv_tag, MPI_Comm &comm, MPI_Status *status)
+                 const int recv_tag, const MPI_Comm &comm, MPI_Status *status)
 {
     GKO_ASSERT_NO_MPI_ERRORS(MPI_Recv(recv_buffer, recv_count, recv_type,
                                       source_rank, recv_tag, comm, status));
@@ -102,7 +102,8 @@ inline void recv(void *recv_buffer, const int recv_count,
 
 inline void i_send(const void *send_buffer, const int send_count,
                    MPI_Datatype &send_type, const int destination_rank,
-                   const int send_tag, MPI_Comm &comm, MPI_Request *request)
+                   const int send_tag, const MPI_Comm &comm,
+                   MPI_Request *request)
 {
     GKO_ASSERT_NO_MPI_ERRORS(MPI_Isend(send_buffer, send_count, send_type,
                                        destination_rank, send_tag, comm,
@@ -112,7 +113,8 @@ inline void i_send(const void *send_buffer, const int send_count,
 
 inline void i_recv(void *recv_buffer, const int recv_count,
                    MPI_Datatype &recv_type, const int source_rank,
-                   const int recv_tag, MPI_Comm &comm, MPI_Request *request)
+                   const int recv_tag, const MPI_Comm &comm,
+                   MPI_Request *request)
 {
     GKO_ASSERT_NO_MPI_ERRORS(MPI_Irecv(recv_buffer, recv_count, recv_type,
                                        source_rank, recv_tag, comm, request));
@@ -120,7 +122,7 @@ inline void i_recv(void *recv_buffer, const int recv_count,
 
 
 inline void broadcast(void *buffer, int count, MPI_Datatype &bcast_type,
-                      int root_rank, MPI_Comm &comm)
+                      int root_rank, const MPI_Comm &comm)
 {
     GKO_ASSERT_NO_MPI_ERRORS(
         MPI_Bcast(buffer, count, bcast_type, root_rank, comm));
@@ -129,7 +131,7 @@ inline void broadcast(void *buffer, int count, MPI_Datatype &bcast_type,
 
 inline void reduce(const void *send_buffer, void *recv_buffer, int count,
                    MPI_Datatype &reduce_type, MPI_Op operation, int root_rank,
-                   MPI_Comm &comm)
+                   const MPI_Comm &comm)
 {
     GKO_ASSERT_NO_MPI_ERRORS(MPI_Reduce(send_buffer, recv_buffer, count,
                                         reduce_type, operation, root_rank,
@@ -139,7 +141,7 @@ inline void reduce(const void *send_buffer, void *recv_buffer, int count,
 
 inline void all_reduce(const void *send_buffer, void *recv_buffer, int count,
                        MPI_Datatype &reduce_type, MPI_Op operation,
-                       MPI_Comm &comm)
+                       const MPI_Comm &comm)
 {
     GKO_ASSERT_NO_MPI_ERRORS(MPI_Allreduce(send_buffer, recv_buffer, count,
                                            reduce_type, operation, comm));
@@ -148,7 +150,7 @@ inline void all_reduce(const void *send_buffer, void *recv_buffer, int count,
 
 inline void i_reduce(const void *send_buffer, void *recv_buffer, int count,
                      MPI_Datatype &reduce_type, MPI_Op operation, int root_rank,
-                     MPI_Comm &comm, MPI_Request *requests)
+                     const MPI_Comm &comm, MPI_Request *requests)
 {
     GKO_ASSERT_NO_MPI_ERRORS(MPI_Ireduce(send_buffer, recv_buffer, count,
                                          reduce_type, operation, root_rank,
@@ -158,7 +160,7 @@ inline void i_reduce(const void *send_buffer, void *recv_buffer, int count,
 
 inline void i_all_reduce(const void *send_buffer, void *recv_buffer, int count,
                          MPI_Datatype &reduce_type, MPI_Op operation,
-                         MPI_Comm &comm, MPI_Request *requests)
+                         const MPI_Comm &comm, MPI_Request *requests)
 {
     GKO_ASSERT_NO_MPI_ERRORS(MPI_Iallreduce(send_buffer, recv_buffer, count,
                                             reduce_type, operation, comm,
@@ -169,7 +171,7 @@ inline void i_all_reduce(const void *send_buffer, void *recv_buffer, int count,
 inline void gather(const void *send_buffer, const int send_count,
                    MPI_Datatype &send_type, void *recv_buffer,
                    const int recv_count, MPI_Datatype &recv_type, int root,
-                   MPI_Comm &comm)
+                   const MPI_Comm &comm)
 {
     GKO_ASSERT_NO_MPI_ERRORS(MPI_Gather(send_buffer, send_count, send_type,
                                         recv_buffer, recv_count, recv_type,
@@ -179,7 +181,8 @@ inline void gather(const void *send_buffer, const int send_count,
 inline void gatherv(const void *send_buffer, const int send_count,
                     MPI_Datatype &send_type, void *recv_buffer,
                     const int *recv_counts, const int *displacements,
-                    MPI_Datatype &recv_type, int root_rank, MPI_Comm &comm)
+                    MPI_Datatype &recv_type, int root_rank,
+                    const MPI_Comm &comm)
 {
     GKO_ASSERT_NO_MPI_ERRORS(
         MPI_Gatherv(send_buffer, send_count, send_type, recv_buffer,
@@ -189,7 +192,7 @@ inline void gatherv(const void *send_buffer, const int send_count,
 inline void scatter(const void *send_buffer, const int send_count,
                     MPI_Datatype &send_type, void *recv_buffer,
                     const int recv_count, MPI_Datatype &recv_type, int root,
-                    MPI_Comm &comm)
+                    const MPI_Comm &comm)
 {
     GKO_ASSERT_NO_MPI_ERRORS(MPI_Scatter(send_buffer, send_count, send_type,
                                          recv_buffer, recv_count, recv_type,
@@ -199,7 +202,8 @@ inline void scatter(const void *send_buffer, const int send_count,
 inline void scatterv(const void *send_buffer, const int *send_counts,
                      const int *displacements, MPI_Datatype &send_type,
                      void *recv_buffer, const int recv_count,
-                     MPI_Datatype &recv_type, int root_rank, MPI_Comm &comm)
+                     MPI_Datatype &recv_type, int root_rank,
+                     const MPI_Comm &comm)
 {
     GKO_ASSERT_NO_MPI_ERRORS(
         MPI_Scatterv(send_buffer, send_counts, displacements, send_type,

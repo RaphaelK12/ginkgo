@@ -1388,7 +1388,6 @@ enum class op_type {
     max_val_and_loc = 12,
     min_val_and_loc = 13
 };
-
 }
 
 
@@ -1469,50 +1468,53 @@ public:
     template <typename SendType>
     void send(const SendType *send_buffer, const int send_count,
               const int destination_rank, const int send_tag,
-              bool non_blocking = false);
+              bool non_blocking = false) const;
 
     // MPI_Recv
     template <typename RecvType>
     void recv(RecvType *recv_buffer, const int recv_count,
               const int source_rank, const int recv_tag,
-              bool non_blocking = false);
+              bool non_blocking = false) const;
 
     // MPI_Gather
     template <typename SendType, typename RecvType>
     void gather(const SendType *send_buffer, const int send_count,
-                RecvType *recv_buffer, const int recv_count, int root_rank);
+                RecvType *recv_buffer, const int recv_count,
+                int root_rank) const;
 
     // MPI_Gatherv
     template <typename SendType, typename RecvType>
     void gather(const SendType *send_buffer, const int send_count,
                 RecvType *recv_buffer, const int *recv_counts,
-                const int *displacements, int root_rank);
+                const int *displacements, int root_rank) const;
 
     // MPI_Scatter
     template <typename SendType, typename RecvType>
     void scatter(const SendType *send_buffer, const int send_count,
-                 RecvType *recv_buffer, const int recv_count, int root_rank);
+                 RecvType *recv_buffer, const int recv_count,
+                 int root_rank) const;
 
     // MPI_Scatterv
     template <typename SendType, typename RecvType>
     void scatter(const SendType *send_buffer, const int *send_counts,
                  const int *displacements, RecvType *recv_buffer,
-                 const int recv_count, int root_rank);
+                 const int recv_count, int root_rank) const;
 
     // MPI_Bcast
     template <typename BroadcastType>
-    void broadcast(BroadcastType *buffer, int count, int root_rank);
+    void broadcast(BroadcastType *buffer, int count, int root_rank) const;
 
     // MPI_Reduce
     template <typename ReduceType>
     void reduce(const ReduceType *send_buffer, ReduceType *recv_buffer,
                 int count, mpi::op_type op_enum, int root_rank,
-                bool non_blocking = false);
+                bool non_blocking = false) const;
 
     // MPI_Allreduce
     template <typename ReduceType>
     void all_reduce(const ReduceType *send_buffer, ReduceType *recv_buffer,
-                    int count, mpi::op_type op_enum, bool non_blocking = false);
+                    int count, mpi::op_type op_enum,
+                    bool non_blocking = false) const;
 
 protected:
     MpiExecutor() = delete;
