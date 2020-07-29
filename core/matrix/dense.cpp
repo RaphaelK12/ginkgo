@@ -659,7 +659,7 @@ std::unique_ptr<LinOp> Dense<ValueType>::conj_transpose() const
 template <typename ValueType>
 std::unique_ptr<Dense<ValueType>> Dense<ValueType>::collect_on_root(
     std::shared_ptr<gko::Executor> exec,
-    const Array<size_type> &row_distribution) const
+    const IndexSet<size_type> &row_set) const
 {
     GKO_ASSERT_MPI_EXEC(exec.get());
     auto mpi_exec = gko::as<MpiExecutor>(exec.get());
@@ -670,19 +670,18 @@ std::unique_ptr<Dense<ValueType>> Dense<ValueType>::collect_on_root(
 
     auto mat_size = this->get_size();
     auto mat_stride = this->get_stride();
-    auto local_num_rows = row_distribution.get_num_elems();
+    auto local_num_rows = row_set.get_num_elems();
     GKO_ASSERT_CONDITION(mat_size[0] == local_num_rows);
     auto global_num_rows = local_num_rows;
     mpi_exec->all_reduce(&local_num_rows, &global_num_rows, 1,
                          gko::mpi::op_type::sum);
-    auto max_index_size = std::max_element(
-        row_distribution.get_const_data(),
-        row_distribution.get_const_data() + row_distribution.get_num_elems());
+    auto max_index_size = row_set.get_largest_element_in_set();
     auto index_set =
-        gko::IndexSet<gko::int32>{(*max_index_size + 1) * mat_stride};
-    for (auto i = 0; i < row_distribution.get_num_elems(); ++i) {
-        index_set.add_dense_row(row_distribution.get_const_data()[i],
-                                mat_stride);
+        gko::IndexSet<gko::int32>{(max_index_size + 1) * mat_stride};
+    auto elem = row_set.begin();
+    for (auto i = 0; i < local_num_rows; ++i) {
+        index_set.add_dense_row(*elem, mat_stride);
+        elem++;
     }
     auto gathered_array =
         this->get_const_values_array().collect_on_root(exec, index_set);
@@ -699,7 +698,7 @@ std::unique_ptr<Dense<ValueType>> Dense<ValueType>::collect_on_root(
 template <typename ValueType>
 std::unique_ptr<Dense<ValueType>> Dense<ValueType>::collect_on_all(
     std::shared_ptr<gko::Executor> exec,
-    const Array<size_type> &row_distribution) const
+    const IndexSet<size_type> &row_set) const
 {
     GKO_ASSERT_MPI_EXEC(exec.get());
     auto mpi_exec = gko::as<MpiExecutor>(exec.get());
@@ -710,19 +709,18 @@ std::unique_ptr<Dense<ValueType>> Dense<ValueType>::collect_on_all(
 
     auto mat_size = this->get_size();
     auto mat_stride = this->get_stride();
-    auto local_num_rows = row_distribution.get_num_elems();
+    auto local_num_rows = row_set.get_num_elems();
     GKO_ASSERT_CONDITION(mat_size[0] == local_num_rows);
     auto global_num_rows = local_num_rows;
     mpi_exec->all_reduce(&local_num_rows, &global_num_rows, 1,
                          gko::mpi::op_type::sum);
-    auto max_index_size = std::max_element(
-        row_distribution.get_const_data(),
-        row_distribution.get_const_data() + row_distribution.get_num_elems());
+    auto max_index_size = row_set.get_largest_element_in_set();
     auto index_set =
-        gko::IndexSet<gko::int32>{(*max_index_size + 1) * mat_stride};
-    for (auto i = 0; i < row_distribution.get_num_elems(); ++i) {
-        index_set.add_dense_row(row_distribution.get_const_data()[i],
-                                mat_stride);
+        gko::IndexSet<gko::int32>{(max_index_size + 1) * mat_stride};
+    auto elem = row_set.begin();
+    for (auto i = 0; i < local_num_rows; ++i) {
+        index_set.add_dense_row(*elem, mat_stride);
+        elem++;
     }
     auto gathered_array =
         this->get_const_values_array().collect_on_all(exec, index_set);

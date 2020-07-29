@@ -224,11 +224,11 @@ public:
 
     std::unique_ptr<Dense> collect_on_root(
         std::shared_ptr<gko::Executor> exec,
-        const Array<size_type> &row_distribution) const override;
+        const IndexSet<size_type> &row_set) const override;
 
     std::unique_ptr<Dense> collect_on_all(
         std::shared_ptr<gko::Executor> exec,
-        const Array<size_type> &row_distribution) const override;
+        const IndexSet<size_type> &row_set) const override;
 
     std::unique_ptr<LinOp> row_permute(
         const Array<int32> *permutation_indices) const override;
@@ -530,33 +530,22 @@ protected:
     }
 
 
-    template <typename ExecType, typename ValuesArray>
+    template <typename ExecType, typename IndexType, typename ValuesArray>
     static std::unique_ptr<Dense> distribute_impl(ExecType &exec, dim<2> &size,
-                                                  Array<size_type> &rows,
+                                                  IndexSet<IndexType> &row_set,
                                                   ValuesArray &&values,
                                                   size_type stride)
     {
-        rows.set_executor(exec->get_master());
-        // TODO: Is this better than passing the max size as a parameter ?
-        auto max_index_size =
-            std::max_element(rows.get_const_data(),
-                             rows.get_const_data() + rows.get_num_elems());
-        auto index_set =
-            gko::IndexSet<gko::int32>{(*max_index_size + 1) * stride};
-        for (auto i = 0; i < rows.get_num_elems(); ++i) {
-            index_set.add_dense_row(rows.get_const_data()[i], stride);
+        auto max_index_size = row_set.get_largest_element_in_set() + 1;
+        auto values_set = gko::IndexSet<IndexType>{max_index_size * stride};
+        auto mpi_exec = gko::as<MpiExecutor>(exec.get());
+        auto my_rank = mpi_exec->get_my_rank();
+        auto elem = row_set.begin();
+        for (auto i = 0; i < row_set.get_num_elems(); ++i) {
+            values_set.add_dense_row(*elem, stride);
+            elem++;
         }
-        return Dense::create(exec, size, values.distribute(exec, index_set),
-                             stride);
-    }
-
-
-    template <typename ExecType, typename IndexType, typename ValuesArray>
-    static std::unique_ptr<Dense> distribute_impl(
-        ExecType &exec, dim<2> &size, IndexSet<IndexType> &index_set,
-        ValuesArray &&values, size_type stride)
-    {
-        return Dense::create(exec, size, values.distribute(exec, index_set),
+        return Dense::create(exec, size, values.distribute(exec, values_set),
                              stride);
     }
 
@@ -698,7 +687,7 @@ std::unique_ptr<Matrix> initialize(
  */
 template <typename Matrix, typename... TArgs>
 std::unique_ptr<Matrix> initialize_and_distribute(
-    size_type stride, const Array<size_type> &row_dist,
+    size_type stride, const IndexSet<size_type> &row_set,
     std::initializer_list<typename Matrix::value_type> vals,
     std::shared_ptr<const Executor> exec, TArgs &&... create_args)
 {
@@ -707,15 +696,13 @@ std::unique_ptr<Matrix> initialize_and_distribute(
     auto mpi_exec = as<gko::MpiExecutor>(exec.get());
     auto num_ranks = mpi_exec->get_num_ranks();
     auto my_rank = mpi_exec->get_my_rank();
-    size_type num_rows = row_dist.get_num_elems();
+    auto num_rows = row_set.get_num_elems();
     auto tmp = dense::create(mpi_exec->get_sub_executor()->get_master(),
                              dim<2>{num_rows, 1}, stride);
     size_type idx = 0;
     size_type l_idx = 0;
     for (const auto &elem : vals) {
-        if (std::find(row_dist.get_const_data(),
-                      row_dist.get_const_data() + num_rows,
-                      idx) != (row_dist.get_const_data() + num_rows)) {
+        if (row_set.is_element(idx)) {
             tmp->at(l_idx) = elem;
             ++l_idx;
         }
@@ -818,7 +805,7 @@ std::unique_ptr<Matrix> initialize(
  *                (not including the implied Executor as the first argument)
  *
  * @param stride  row stride for the temporary Dense matrix
- * @param row_dist  row distribution local the the ranks
+ * @param row_set  The index set with the row distribution of the local rank
  * @param vals  values used to initialize the matrix
  * @param exec  Executor associated to the matrix
  * @param create_args  additional arguments passed to Matrix::create, not
@@ -830,7 +817,7 @@ std::unique_ptr<Matrix> initialize(
  */
 template <typename Matrix, typename... TArgs>
 std::unique_ptr<Matrix> initialize_and_distribute(
-    size_type stride, const Array<size_type> &row_dist,
+    size_type stride, const IndexSet<size_type> &row_set,
     std::initializer_list<std::initializer_list<typename Matrix::value_type>>
         vals,
     std::shared_ptr<const Executor> exec, TArgs &&... create_args)
@@ -840,16 +827,14 @@ std::unique_ptr<Matrix> initialize_and_distribute(
     auto mpi_exec = as<gko::MpiExecutor>(exec.get());
     auto num_ranks = mpi_exec->get_num_ranks();
     auto my_rank = mpi_exec->get_my_rank();
-    size_type num_rows = row_dist.get_num_elems();
+    size_type num_rows = row_set.get_num_elems();
     size_type num_cols = num_rows > 0 ? begin(vals)->size() : 1;
     auto tmp = dense::create(mpi_exec->get_sub_executor()->get_master(),
                              dim<2>{num_rows, num_cols}, stride);
     size_type ridx = 0;
     size_type local_ridx = 0;
     for (const auto &row : vals) {
-        if (std::find(row_dist.get_const_data(),
-                      row_dist.get_const_data() + num_rows,
-                      ridx) != (row_dist.get_const_data() + num_rows)) {
+        if (row_set.is_element(ridx)) {
             size_type cidx = 0;
             for (const auto &elem : row) {
                 tmp->at(local_ridx, cidx) = elem;
@@ -913,7 +898,7 @@ std::unique_ptr<Matrix> initialize(
  * @tparam TArgs  argument types for Matrix::create method
  *                (not including the implied Executor as the first argument)
  *
- * @param row_dist  row distribution local the the ranks
+ * @param row_set  The index set with the row distribution of the local rank
  * @param vals  values used to initialize the matrix
  * @param exec  Executor associated to the matrix
  * @param create_args  additional arguments passed to Matrix::create, not
@@ -925,13 +910,13 @@ std::unique_ptr<Matrix> initialize(
  */
 template <typename Matrix, typename... TArgs>
 std::unique_ptr<Matrix> initialize_and_distribute(
-    const Array<size_type> &row_dist,
+    const IndexSet<size_type> &row_set,
     std::initializer_list<std::initializer_list<typename Matrix::value_type>>
         vals,
     std::shared_ptr<const Executor> exec, TArgs &&... create_args)
 {
     return initialize_and_distribute<Matrix>(
-        vals.size() > 0 ? begin(vals)->size() : 0, row_dist, vals,
+        vals.size() > 0 ? begin(vals)->size() : 0, row_set, vals,
         std::move(exec), std::forward<TArgs>(create_args)...);
 }
 

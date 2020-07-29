@@ -465,6 +465,20 @@ GKO_ATTRIBUTES constexpr bool operator!=(precision_reduction x,
 
 
 /**
+ * Instantiates a template for each index type compiled by Ginkgo.
+ *
+ * @param _macro  A macro which expands the template instantiation
+ *                (not including the leading `template` specifier).
+ *                Should take one argument, which is replaced by the
+ *                value type.
+ */
+#define GKO_INSTANTIATE_FOR_EACH_INDEX_AND_SIZE_TYPE(_macro) \
+    template _macro(int32);                                  \
+    template _macro(int64);                                  \
+    template _macro(size_type)
+
+
+/**
  * Instantiates a template for each value and index type compiled by Ginkgo.
  *
  * @param _macro  A macro which expands the template instantiation
@@ -496,12 +510,21 @@ GKO_ATTRIBUTES constexpr bool operator!=(precision_reduction x,
     template _macro(double, int32);                                 \
     template _macro(std::complex<float>, int32);                    \
     template _macro(std::complex<double>, int32);                   \
+    template _macro(float, size_type);                              \
+    template _macro(double, size_type);                             \
+    template _macro(std::complex<float>, size_type);                \
+    template _macro(std::complex<double>, size_type);               \
     template _macro(float, int64);                                  \
     template _macro(double, int64);                                 \
     template _macro(std::complex<float>, int64);                    \
     template _macro(std::complex<double>, int64);                   \
+    template _macro(size_type, int32);                              \
+    template _macro(size_type, int64);                              \
+    template _macro(size_type, size_type);                          \
+    template _macro(int32, size_type);                              \
     template _macro(int32, int32);                                  \
     template _macro(int32, int64);                                  \
+    template _macro(int64, size_type);                              \
     template _macro(int64, int32);                                  \
     template _macro(int64, int64)
 
@@ -575,10 +598,15 @@ GKO_ATTRIBUTES constexpr bool operator!=(precision_reduction x,
     template _macro(double, float);                             \
     template _macro(std::complex<float>, std::complex<double>); \
     template _macro(std::complex<double>, std::complex<float>); \
+    template _macro(size_type, size_type);                      \
+    template _macro(size_type, int);                            \
+    template _macro(size_type, long int);                       \
+    template _macro(int, size_type);                            \
     template _macro(int, int);                                  \
     template _macro(int, long int);                             \
-    template _macro(long int, long int);                        \
-    template _macro(long int, int)
+    template _macro(long int, size_type);                       \
+    template _macro(long int, int);                             \
+    template _macro(long int, long int)
 
 
 }  // namespace gko
