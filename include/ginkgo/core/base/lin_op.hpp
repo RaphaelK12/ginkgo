@@ -503,25 +503,27 @@ public:
  * ```
  */
 template <typename ObjType>
-class Gatherable {
+class Collectable {
 public:
-    virtual ~Gatherable() = default;
+    virtual ~Collectable() = default;
 
     /**
-     * Returns a gathered ObjType of the object on the root.
+     * Returns a collected ObjType of the object on the root.
      *
-     * @return a pointer to the new gathered object
+     * @return a pointer to the new collected object
      */
-    virtual std::unique_ptr<ObjType> gather_on_root(
-        const Array<size_type> *row_distribution) const = 0;
+    virtual std::unique_ptr<ObjType> collect_on_root(
+        std::shared_ptr<gko::Executor> exec,
+        const Array<size_type> &row_distribution) const = 0;
 
     /**
-     * Returns a gathered ObjType of the object on all ranks.
+     * Returns a collected ObjType of the object on all ranks.
      *
-     * @return a pointer to the new gathered object
+     * @return a pointer to the new collected object
      */
-    virtual std::unique_ptr<ObjType> gather_on_all(
-        const Array<size_type> *row_distribution) const = 0;
+    virtual std::unique_ptr<ObjType> collect_on_all(
+        std::shared_ptr<gko::Executor> exec,
+        const Array<size_type> &row_distribution) const = 0;
 };
 
 

@@ -110,7 +110,7 @@ class Dense : public EnableLinOp<Dense<ValueType>>,
               public WritableToMatrixData<ValueType, int32>,
               public WritableToMatrixData<ValueType, int64>,
               public Transposable,
-              public Gatherable<Dense<ValueType>>,
+              public Collectable<Dense<ValueType>>,
               public Permutable<int32>,
               public Permutable<int64> {
     friend class EnableCreateMethod<Dense>;
@@ -222,11 +222,13 @@ public:
 
     std::unique_ptr<LinOp> conj_transpose() const override;
 
-    std::unique_ptr<Dense> gather_on_root(
-        const Array<size_type> *row_distribution) const override;
+    std::unique_ptr<Dense> collect_on_root(
+        std::shared_ptr<gko::Executor> exec,
+        const Array<size_type> &row_distribution) const override;
 
-    std::unique_ptr<Dense> gather_on_all(
-        const Array<size_type> *row_distribution) const override;
+    std::unique_ptr<Dense> collect_on_all(
+        std::shared_ptr<gko::Executor> exec,
+        const Array<size_type> &row_distribution) const override;
 
     std::unique_ptr<LinOp> row_permute(
         const Array<int32> *permutation_indices) const override;
@@ -271,6 +273,26 @@ public:
     const value_type *get_const_values() const noexcept
     {
         return values_.get_const_data();
+    }
+
+
+    /**
+     * Returns array of values of the matrix.
+     *
+     * @return the array of values
+     */
+    Array<ValueType> get_values_array() noexcept { return values_; }
+
+    /**
+     * @copydoc get_values_array()
+     *
+     * @note This is the constant version of the function, which can be
+     *       significantly more memory efficient than the non-constant version,
+     *       so always prefer this version.
+     */
+    const Array<ValueType> get_const_values_array() const noexcept
+    {
+        return values_;
     }
 
     /**
