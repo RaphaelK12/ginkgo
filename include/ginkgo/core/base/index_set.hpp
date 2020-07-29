@@ -357,6 +357,13 @@ public:
     size_type get_largest_subset_starting_index() const;
 
     /**
+     * This function returns the largest element in the subset
+     *
+     * This call assumes that the IndexSet is nonempty.
+     */
+    IndexType get_largest_element_in_set() const;
+
+    /**
      * Comparison for equality of index sets. This operation is only allowed if
      * the size of the two sets is the same (though of course they do not have
      * to have the same number of indices).

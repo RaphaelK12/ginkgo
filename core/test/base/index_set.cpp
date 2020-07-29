@@ -268,6 +268,16 @@ TYPED_TEST(IndexSet, CanGetLargestSubsetStartIndex)
 }
 
 
+TYPED_TEST(IndexSet, CanGetLargestElementInSet)
+{
+    auto idx_set = gko::IndexSet<TypeParam>{40};
+    idx_set.add_subset(0, 4);
+    idx_set.add_subset(10, 30);
+    idx_set.add_subset(5, 7);
+    ASSERT_EQ(idx_set.get_largest_element_in_set(), 29);
+}
+
+
 TYPED_TEST(IndexSet, CanCompareIndexSets)
 {
     auto idx_set = gko::IndexSet<TypeParam>{12};

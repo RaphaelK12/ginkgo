@@ -504,14 +504,21 @@ public:
      */
     template <typename IndexType>
     Array distribute(std::shared_ptr<gko::Executor> exec,
-                     const IndexSet<IndexType> &index_set);
+                     const IndexSet<IndexType> &index_set) const;
 
     /**
-     * Gathers the array according to the given index set.
+     * Gathers the array only on root according to the given index set.
      */
     template <typename IndexType>
-    Array gather(std::shared_ptr<gko::Executor> exec,
-                 const IndexSet<IndexType> &index_set);
+    Array collect_on_root(std::shared_ptr<gko::Executor> exec,
+                          const IndexSet<IndexType> &index_set) const;
+
+    /**
+     * Gathers the array on all ranks according to the given index set.
+     */
+    template <typename IndexType>
+    Array collect_on_all(std::shared_ptr<gko::Executor> exec,
+                         const IndexSet<IndexType> &index_set) const;
 
     /**
      * Computes the sqrt of each element in the array.

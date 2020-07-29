@@ -99,7 +99,8 @@ GKO_INSTANTIATE_FOR_EACH_VALUE_TYPE_PAIR(GKO_DECLARE_ARRAY_SQRT);
 template <typename ValueType>
 template <typename IndexType>
 Array<ValueType> Array<ValueType>::distribute(
-    std::shared_ptr<gko::Executor> exec, const IndexSet<IndexType> &index_set)
+    std::shared_ptr<gko::Executor> exec,
+    const IndexSet<IndexType> &index_set) const
 {
     GKO_ASSERT_CONDITION(index_set.get_num_subsets() >= 1);
     using itype = IndexType;
@@ -219,7 +220,7 @@ Array<ValueType> Array<ValueType>::distribute(
 #define GKO_DECLARE_ARRAY_DISTRIBUTE(ValueType, IndexType) \
     Array<ValueType> Array<ValueType>::distribute(         \
         std::shared_ptr<gko::Executor> exec,               \
-        const IndexSet<IndexType> &index_set)
+        const IndexSet<IndexType> &index_set) const
 
 GKO_INSTANTIATE_FOR_EACH_VALUE_INDEX_AND_INDEX_TYPE(
     GKO_DECLARE_ARRAY_DISTRIBUTE);
@@ -227,8 +228,9 @@ GKO_INSTANTIATE_FOR_EACH_VALUE_INDEX_AND_INDEX_TYPE(
 
 template <typename ValueType>
 template <typename IndexType>
-Array<ValueType> Array<ValueType>::gather(std::shared_ptr<gko::Executor> exec,
-                                          const IndexSet<IndexType> &index_set)
+Array<ValueType> Array<ValueType>::collect_on_root(
+    std::shared_ptr<gko::Executor> exec,
+    const IndexSet<IndexType> &index_set) const
 {
     GKO_ASSERT_CONDITION(index_set.get_num_subsets() >= 1);
     using itype = IndexType;
@@ -247,6 +249,16 @@ Array<ValueType> Array<ValueType>::gather(std::shared_ptr<gko::Executor> exec,
         std::accumulate(num_subsets_array.get_data(),
                         num_subsets_array.get_data() + num_ranks, 0);
     mpi_exec->broadcast(&total_num_subsets, 1, root_rank);
+    itype max_row_num = index_set.get_largest_element_in_set();
+    auto max_row_num_array =
+        Array<itype>{sub_exec->get_master(), static_cast<size_type>(num_ranks)};
+    mpi_exec->gather(&max_row_num, 1, max_row_num_array.get_data(), 1,
+                     root_rank);
+    auto gathered_num_rows =
+        (*std::max_element(max_row_num_array.get_data(),
+                           max_row_num_array.get_data() + num_ranks)) +
+        1;
+    mpi_exec->broadcast(&gathered_num_rows, 1, root_rank);
 
     itype num_elems = static_cast<itype>(index_set.get_num_elems());
     auto num_elems_array =
@@ -303,10 +315,26 @@ Array<ValueType> Array<ValueType>::gather(std::shared_ptr<gko::Executor> exec,
     mpi_exec->gather(tag.get_const_data(), int(num_subsets), tags.get_data(),
                      recv_count_array.get_const_data(), displ.get_const_data(),
                      root_rank);
+    Array<ValueType> gathered_array;
+    if (my_rank == root_rank) {
+        gathered_array = Array<ValueType>{exec, size_type(gathered_num_rows)};
+    }
+    auto offset = 0;
+    for (auto in_subset = 0; in_subset < num_subsets; ++in_subset) {
+        auto n_elems = num_elems_in_subset.get_data()[in_subset];
+        auto start_idx = start_idx_array.get_data()[in_subset];
+        if (my_rank != root_rank) {
+            mpi_exec->send(&(this->get_const_data()[offset]), n_elems,
+                           root_rank, tag.get_data()[in_subset]);
+        } else {
+            gathered_array.get_executor()->get_mem_space()->copy_from(
+                sub_exec->get_mem_space().get(), n_elems,
+                &(this->get_const_data()[offset]),
+                &gathered_array.get_data()[start_idx]);
+        }
+        offset += n_elems;
+    }
 
-    auto gathered_array = Array<ValueType>{exec, index_set.get_num_elems()};
-    auto req_array =
-        mpi_exec->create_requests_array(num_ranks * total_num_subsets);
     auto idx = 0;
     for (auto in_rank = 0; in_rank < num_ranks; ++in_rank) {
         auto n_subsets = num_subsets_array.get_data()[in_rank];
@@ -316,8 +344,8 @@ Array<ValueType> Array<ValueType>::gather(std::shared_ptr<gko::Executor> exec,
                     auto offset = offset_array.get_data()[idx];
                     auto g_n_elems =
                         global_num_elems_subset_array.get_data()[idx];
-                    mpi_exec->send(&(this->get_const_data()[offset]), g_n_elems,
-                                   in_rank, tags.get_data()[idx]);
+                    mpi_exec->recv(&gathered_array.get_data()[offset],
+                                   g_n_elems, in_rank, tags.get_data()[idx]);
                     idx++;
                 }
             }
@@ -325,32 +353,159 @@ Array<ValueType> Array<ValueType>::gather(std::shared_ptr<gko::Executor> exec,
             idx += n_subsets;
         }
     }
-    auto offset = 0;
-    for (auto in_subset = 0; in_subset < num_subsets; ++in_subset) {
-        auto n_elems = num_elems_in_subset.get_data()[in_subset];
-        auto start_idx = start_idx_array.get_data()[in_subset];
-        if (my_rank != root_rank) {
-            mpi_exec->recv(&gathered_array.get_data()[offset], n_elems,
-                           root_rank, tag.get_data()[in_subset]);
-        } else {
-            gathered_array.get_executor()->get_mem_space()->copy_from(
-                sub_exec->get_mem_space().get(), n_elems,
-                &(this->get_const_data()[start_idx]),
-                &gathered_array.get_data()[offset]);
-        }
-        offset += n_elems;
-    }
 
     return std::move(gathered_array);
 }
 
 
-#define GKO_DECLARE_ARRAY_GATHER(ValueType, IndexType) \
-    Array<ValueType> Array<ValueType>::gather(         \
-        std::shared_ptr<gko::Executor> exec,           \
-        const IndexSet<IndexType> &index_set)
+#define GKO_DECLARE_ARRAY_COLLECT_ON_ROOT(ValueType, IndexType) \
+    Array<ValueType> Array<ValueType>::collect_on_root(         \
+        std::shared_ptr<gko::Executor> exec,                    \
+        const IndexSet<IndexType> &index_set) const
 
-GKO_INSTANTIATE_FOR_EACH_VALUE_INDEX_AND_INDEX_TYPE(GKO_DECLARE_ARRAY_GATHER);
+GKO_INSTANTIATE_FOR_EACH_VALUE_INDEX_AND_INDEX_TYPE(
+    GKO_DECLARE_ARRAY_COLLECT_ON_ROOT);
+
+
+template <typename ValueType>
+template <typename IndexType>
+Array<ValueType> Array<ValueType>::collect_on_all(
+    std::shared_ptr<gko::Executor> exec,
+    const IndexSet<IndexType> &index_set) const
+{
+    GKO_ASSERT_CONDITION(index_set.get_num_subsets() >= 1);
+    using itype = IndexType;
+    auto mpi_exec = as<gko::MpiExecutor>(exec.get());
+    auto sub_exec = exec->get_sub_executor();
+    auto num_ranks = mpi_exec->get_num_ranks();
+    auto my_rank = mpi_exec->get_my_rank();
+    auto root_rank = mpi_exec->get_root_rank();
+
+    itype num_subsets = index_set.get_num_subsets();
+    auto num_subsets_array =
+        Array<itype>{sub_exec->get_master(), static_cast<size_type>(num_ranks)};
+    mpi_exec->gather(&num_subsets, 1, num_subsets_array.get_data(), 1,
+                     root_rank);
+    auto total_num_subsets =
+        std::accumulate(num_subsets_array.get_data(),
+                        num_subsets_array.get_data() + num_ranks, 0);
+    mpi_exec->broadcast(&total_num_subsets, 1, root_rank);
+    itype max_row_num = index_set.get_largest_element_in_set();
+    auto max_row_num_array =
+        Array<itype>{sub_exec->get_master(), static_cast<size_type>(num_ranks)};
+    mpi_exec->gather(&max_row_num, 1, max_row_num_array.get_data(), 1,
+                     root_rank);
+    auto gathered_num_rows =
+        (*std::max_element(max_row_num_array.get_data(),
+                           max_row_num_array.get_data() + num_ranks)) +
+        1;
+    mpi_exec->broadcast(&gathered_num_rows, 1, root_rank);
+
+    itype num_elems = static_cast<itype>(index_set.get_num_elems());
+    auto num_elems_array =
+        Array<itype>{sub_exec->get_master(), static_cast<size_type>(num_ranks)};
+    mpi_exec->gather(&num_elems, 1, num_elems_array.get_data(), 1, root_rank);
+
+    auto start_idx_array = Array<itype>{sub_exec->get_master(),
+                                        static_cast<size_type>(num_subsets)};
+    auto num_elems_in_subset = Array<itype>{
+        sub_exec->get_master(), static_cast<size_type>(num_subsets)};
+    auto offset_array =
+        Array<itype>{sub_exec->get_master(),
+                     static_cast<size_type>(num_ranks * total_num_subsets)};
+    auto global_num_elems_subset_array =
+        Array<itype>{sub_exec->get_master(),
+                     static_cast<size_type>(num_ranks * total_num_subsets)};
+    auto first_interval = (index_set.get_first_interval());
+    for (auto i = 0; i < num_subsets; ++i) {
+        start_idx_array.get_data()[i] = *(*first_interval).begin();
+        num_elems_in_subset.get_data()[i] = (*first_interval).get_num_elems();
+        first_interval++;
+    }
+    auto recv_count_array = gko::Array<int>{sub_exec->get_master(),
+                                            num_subsets_array.get_num_elems()};
+    detail::convert_data(
+        sub_exec->get_master(), num_subsets_array.get_num_elems(),
+        num_subsets_array.get_const_data(), recv_count_array.get_data());
+    auto displ = gko::Array<int>{sub_exec->get_master(),
+                                 num_subsets_array.get_num_elems()};
+    detail::convert_data(sub_exec->get_master(),
+                         num_subsets_array.get_num_elems(),
+                         num_subsets_array.get_const_data(), displ.get_data());
+    std::partial_sum(displ.get_data(), displ.get_data() + displ.get_num_elems(),
+                     displ.get_data());
+    for (auto i = 0; i < displ.get_num_elems(); ++i) {
+        displ.get_data()[i] -= recv_count_array.get_data()[i];
+    }
+    mpi_exec->gather(start_idx_array.get_const_data(), int(num_subsets),
+                     offset_array.get_data(), recv_count_array.get_const_data(),
+                     displ.get_const_data(), root_rank);
+    mpi_exec->gather(num_elems_in_subset.get_const_data(), int(num_subsets),
+                     global_num_elems_subset_array.get_data(),
+                     recv_count_array.get_const_data(), displ.get_const_data(),
+                     root_rank);
+
+    auto tag = gko::Array<itype>{sub_exec->get_master(),
+                                 static_cast<size_type>(num_subsets)};
+    for (auto t = 0; t < num_subsets; ++t) {
+        tag.get_data()[t] = (my_rank + 1) * 1e4 + t;
+    }
+    auto tags = gko::Array<itype>{
+        sub_exec->get_master(),
+        static_cast<size_type>(num_ranks * total_num_subsets)};
+    mpi_exec->gather(tag.get_const_data(), int(num_subsets), tags.get_data(),
+                     recv_count_array.get_const_data(), displ.get_const_data(),
+                     root_rank);
+    Array<ValueType> gathered_array;
+    gathered_array = Array<ValueType>{exec, size_type(gathered_num_rows)};
+    auto offset = 0;
+    for (auto in_subset = 0; in_subset < num_subsets; ++in_subset) {
+        auto n_elems = num_elems_in_subset.get_data()[in_subset];
+        auto start_idx = start_idx_array.get_data()[in_subset];
+        if (my_rank != root_rank) {
+            mpi_exec->send(&(this->get_const_data()[offset]), n_elems,
+                           root_rank, tag.get_data()[in_subset]);
+        } else {
+            gathered_array.get_executor()->get_mem_space()->copy_from(
+                sub_exec->get_mem_space().get(), n_elems,
+                &(this->get_const_data()[offset]),
+                &gathered_array.get_data()[start_idx]);
+        }
+        offset += n_elems;
+    }
+
+    auto idx = 0;
+    for (auto in_rank = 0; in_rank < num_ranks; ++in_rank) {
+        auto n_subsets = num_subsets_array.get_data()[in_rank];
+        if (in_rank != root_rank) {
+            if (my_rank == root_rank) {
+                for (auto in_subset = 0; in_subset < n_subsets; ++in_subset) {
+                    auto offset = offset_array.get_data()[idx];
+                    auto g_n_elems =
+                        global_num_elems_subset_array.get_data()[idx];
+                    mpi_exec->recv(&gathered_array.get_data()[offset],
+                                   g_n_elems, in_rank, tags.get_data()[idx]);
+                    idx++;
+                }
+            }
+        } else {
+            idx += n_subsets;
+        }
+    }
+    mpi_exec->broadcast(gathered_array.get_data(),
+                        gathered_array.get_num_elems(), root_rank);
+
+    return std::move(gathered_array);
+}
+
+
+#define GKO_DECLARE_ARRAY_COLLECT_ON_ALL(ValueType, IndexType) \
+    Array<ValueType> Array<ValueType>::collect_on_all(         \
+        std::shared_ptr<gko::Executor> exec,                   \
+        const IndexSet<IndexType> &index_set) const
+
+GKO_INSTANTIATE_FOR_EACH_VALUE_INDEX_AND_INDEX_TYPE(
+    GKO_DECLARE_ARRAY_COLLECT_ON_ALL);
 
 
 }  // namespace gko

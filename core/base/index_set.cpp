@@ -516,6 +516,16 @@ size_type IndexSet<IndexType>::get_largest_subset_starting_index() const
 
 
 template <typename IndexType>
+IndexType IndexSet<IndexType>::get_largest_element_in_set() const
+{
+    GKO_ASSERT_CONDITION(subsets_.empty() == false);
+
+    merge();
+    return (subsets_.back()).end_ - 1;
+}
+
+
+template <typename IndexType>
 bool IndexSet<IndexType>::operator==(const IndexSet<IndexType> &other) const
 {
     GKO_ASSERT_CONDITION(get_size() == other.get_size());

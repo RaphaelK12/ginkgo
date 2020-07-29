@@ -198,6 +198,136 @@ TYPED_TEST(DistributedArray, CanDistributeNonContiguousArrays)
 }
 
 
+TYPED_TEST(DistributedArray, CanCollectArrayOnRoot)
+{
+    using value_type = typename TestFixture::value_type;
+    value_type *data;
+    value_type *comp_data;
+    auto sub_exec = this->mpi_exec->get_sub_executor();
+    gko::Array<value_type> coll_array{this->mpi_exec};
+    gko::Array<value_type> comp_array{sub_exec};
+    gko::Array<value_type> local_array{sub_exec};
+    gko::IndexSet<gko::int32> index_set{20};
+    this->mpi_exec->set_root_rank(0);
+    if (this->rank == 0) {
+        // clang-format off
+        comp_data = new value_type[20]{
+                                 1.0, 2.0, -1.0, 2.0,
+                                 0.0, 4.0, -2.0, 9.0,
+                                 3.0, 7.0, 1.0, 0.2,
+                                 -3.0, 4.0, -1.0, 2.0,
+                                 5.0, 6.0, -1.0, 4.0};
+        data = new value_type[8]{
+                                 1.0, 2.0, -1.0, 2.0,
+                                 0.0, 4.0, -2.0, 9.0};
+        // clang-format on
+        comp_array = gko::Array<value_type>(
+            sub_exec, gko::Array<value_type>::view(sub_exec, 20, comp_data));
+        local_array = gko::Array<value_type>(
+            sub_exec, gko::Array<value_type>::view(sub_exec, 8, data));
+        index_set.add_subset(0, 8);
+    } else {
+        // clang-format off
+        data = new value_type[12]{3.0, 7.0, 1.0, 0.2,
+                                       -3.0, 4.0, -1.0, 2.0,
+                                       5.0, 6.0, -1.0, 4.0};
+        // clang-format on
+        index_set.add_subset(8, 20);
+        local_array = gko::Array<value_type>(
+            sub_exec, gko::Array<value_type>::view(sub_exec, 12, data));
+    }
+    coll_array = local_array.collect_on_root(this->mpi_exec, index_set);
+    if (this->rank == 0) {
+        ASSERT_EQ(coll_array.get_executor(), this->mpi_exec);
+        this->assert_equal_arrays(comp_array, coll_array);
+        delete comp_data;
+    }
+    delete data;
+}
+
+
+TYPED_TEST(DistributedArray, CanCollectNonContiguousArraysOnRoot)
+{
+    using value_type = typename TestFixture::value_type;
+    value_type *data;
+    value_type *comp_data;
+    auto sub_exec = this->mpi_exec->get_sub_executor();
+    gko::Array<value_type> coll_array{this->mpi_exec};
+    gko::Array<value_type> comp_array{sub_exec};
+    gko::Array<value_type> local_array{sub_exec};
+    gko::IndexSet<gko::int32> index_set{20};
+    this->mpi_exec->set_root_rank(0);
+    if (this->rank == 0) {
+        comp_data = new value_type[20]{1.0, 2.0,  -1.0, 2.0,  5.0,  4.0, 1.0,
+                                       7.0, 2.0,  -2.0, -1.0, 3.0,  3.0, 8.0,
+                                       1.0, -3.0, 5.0,  6.0,  -1.0, 4.0};
+        data = new value_type[10]{1.0, 2.0, -1.0, 2.0,  5.0,
+                                  3.0, 8.0, 1.0,  -3.0, 5.0};
+        comp_array = gko::Array<value_type>(
+            sub_exec, gko::Array<value_type>::view(sub_exec, 20, comp_data));
+        local_array = gko::Array<TypeParam>(
+            sub_exec, gko::Array<value_type>::view(sub_exec, 10, data));
+        index_set.add_subset(0, 5);
+        index_set.add_subset(12, 17);
+    } else {
+        data = new value_type[10]{4.0,  1.0, 7.0, 2.0,  -2.0,
+                                  -1.0, 3.0, 6.0, -1.0, 4.0};
+        index_set.add_subset(5, 12);
+        index_set.add_subset(17, 20);
+        local_array = gko::Array<TypeParam>(
+            sub_exec, gko::Array<value_type>::view(sub_exec, 10, data));
+    }
+    coll_array = local_array.collect_on_root(this->mpi_exec, index_set);
+    if (this->rank == 0) {
+        ASSERT_EQ(coll_array.get_executor(), this->mpi_exec);
+        this->assert_equal_arrays(coll_array, comp_array);
+        delete comp_data;
+    }
+    delete data;
+}
+
+
+TYPED_TEST(DistributedArray, CanCollectNonContiguousArraysOnAllRanks)
+{
+    using value_type = typename TestFixture::value_type;
+    value_type *data;
+    value_type *comp_data;
+    auto sub_exec = this->mpi_exec->get_sub_executor();
+    gko::Array<value_type> coll_array{this->mpi_exec};
+    gko::Array<value_type> comp_array{sub_exec};
+    gko::Array<value_type> local_array{sub_exec};
+    gko::IndexSet<gko::int32> index_set{20};
+    this->mpi_exec->set_root_rank(0);
+    if (this->rank == 0) {
+        data = new value_type[10]{1.0, 2.0, -1.0, 2.0,  5.0,
+                                  3.0, 8.0, 1.0,  -3.0, 5.0};
+        local_array = gko::Array<TypeParam>(
+            sub_exec, gko::Array<value_type>::view(sub_exec, 10, data));
+        index_set.add_subset(0, 5);
+        index_set.add_subset(12, 17);
+    } else {
+        data = new value_type[10]{4.0,  1.0, 7.0, 2.0,  -2.0,
+                                  -1.0, 3.0, 6.0, -1.0, 4.0};
+        index_set.add_subset(5, 12);
+        index_set.add_subset(17, 20);
+        local_array = gko::Array<TypeParam>(
+            sub_exec, gko::Array<value_type>::view(sub_exec, 10, data));
+    }
+    comp_data = new value_type[20]{1.0, 2.0,  -1.0, 2.0,  5.0,  4.0, 1.0,
+                                   7.0, 2.0,  -2.0, -1.0, 3.0,  3.0, 8.0,
+                                   1.0, -3.0, 5.0,  6.0,  -1.0, 4.0};
+    comp_array = gko::Array<value_type>(
+        sub_exec, gko::Array<value_type>::view(sub_exec, 20, comp_data));
+
+    coll_array = local_array.collect_on_all(this->mpi_exec, index_set);
+
+    ASSERT_EQ(coll_array.get_executor(), this->mpi_exec);
+    this->assert_equal_arrays(coll_array, comp_array);
+    delete comp_data;
+    delete data;
+}
+
+
 }  // namespace
 
 // Calls a custom gtest main with MPI listeners. See gtest-mpi-listeners.hpp for
