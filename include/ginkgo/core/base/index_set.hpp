@@ -94,6 +94,7 @@ public:
         : is_merged_(), largest_subset_(), index_space_size_(), merge_mutex_()
     {
         is_merged_ = other.is_merged_;
+        subsets_ = other.subsets_;
         largest_subset_ = other.largest_subset_;
         index_space_size_ = other.index_space_size_;
     }
@@ -101,7 +102,13 @@ public:
     /**
      * Copy assignment operator.
      */
-    IndexSet &operator=(const IndexSet &) = default;
+    IndexSet &operator=(const IndexSet &other)
+    {
+        is_merged_ = other.is_merged_;
+        subsets_ = other.subsets_;
+        largest_subset_ = other.largest_subset_;
+        index_space_size_ = other.index_space_size_;
+    }
 
     /**
      * Move constructor. Create a new IndexSet by transferring the internal data
@@ -113,7 +120,19 @@ public:
      * Move assignment operator. Transfer the internal data of the input set
      * into the current one.
      */
-    IndexSet &operator=(IndexSet &&is) noexcept;
+    IndexSet &operator=(IndexSet &&other) noexcept
+    {
+        is_merged_ = other.is_merged_;
+        subsets_ = std::move(other.subsets_);
+        largest_subset_ = other.largest_subset_;
+        index_space_size_ = other.index_space_size_;
+
+        other.subsets_.clear();
+        other.is_merged_ = true;
+        other.index_space_size_ = 0;
+        other.largest_subset_ = invalid_unsigned_int;
+        merge();
+    }
 
 
     /**

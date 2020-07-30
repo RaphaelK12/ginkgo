@@ -328,11 +328,12 @@ TYPED_TEST(DistributedDense, CanDistributeDataUsingRowAndStride)
 TYPED_TEST(DistributedDense, CanDistributeDataNonContiguously)
 {
     using value_type = typename TestFixture::value_type;
+    using size_type = gko::size_type;
     value_type *data;
     value_type *comp_data;
     std::shared_ptr<gko::matrix::Dense<value_type>> m{};
     std::shared_ptr<gko::matrix::Dense<value_type>> lm{};
-    gko::IndexSet<gko::int32> row_set{5};
+    gko::IndexSet<size_type> row_set{5};
     gko::dim<2> local_size{};
     this->mpi_exec->set_root_rank(0);
     auto sub_exec = this->mpi_exec->get_sub_executor();
@@ -497,7 +498,8 @@ TYPED_TEST(DistributedDense, AppliesToDense)
 {
     using Mtx = typename TestFixture::Mtx;
     using value_type = typename TestFixture::value_type;
-    gko::IndexSet<gko::int32> index_set{6};
+    using size_type = gko::size_type;
+    gko::IndexSet<size_type> index_set{6};
     gko::dim<2> local_size{};
     gko::dim<2> res_size{};
     std::shared_ptr<gko::matrix::Dense<value_type>> comp_res;
@@ -550,7 +552,8 @@ TYPED_TEST(DistributedDense, ScalesDense)
 {
     using Mtx = typename TestFixture::Mtx;
     using value_type = typename TestFixture::value_type;
-    gko::IndexSet<gko::int32> index_set{6};
+    using size_type = gko::size_type;
+    gko::IndexSet<size_type> index_set{6};
     gko::dim<2> local_size{};
     gko::dim<2> res_size{};
     std::shared_ptr<Mtx> comp_res;
@@ -603,7 +606,8 @@ TYPED_TEST(DistributedDense, AddsScaled)
 {
     using Mtx = typename TestFixture::Mtx;
     using value_type = typename TestFixture::value_type;
-    gko::IndexSet<gko::int32> index_set{6};
+    using size_type = gko::size_type;
+    gko::IndexSet<size_type> index_set{6};
     gko::dim<2> local_size{};
     gko::dim<2> res_size{};
     std::shared_ptr<Mtx> comp_res;

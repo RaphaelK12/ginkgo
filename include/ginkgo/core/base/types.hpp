@@ -475,7 +475,8 @@ GKO_ATTRIBUTES constexpr bool operator!=(precision_reduction x,
 #define GKO_INSTANTIATE_FOR_EACH_INDEX_AND_SIZE_TYPE(_macro) \
     template _macro(int32);                                  \
     template _macro(int64);                                  \
-    template _macro(size_type)
+    template _macro(unsigned long);                          \
+    template _macro(unsigned int)
 
 
 /**

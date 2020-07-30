@@ -483,12 +483,15 @@ protected:
      * @param stride  stride of the rows (i.e. offset between the first
      *                  elements of two consecutive rows, expressed as the
      *                  number of matrix elements)
+     * @param index_set  IndexSet describing the indices on a global set held by
+     *                   this Dense object.
      */
     Dense(std::shared_ptr<const Executor> exec, const dim<2> &size,
           size_type stride)
         : EnableLinOp<Dense>(exec, size),
           values_(exec, size[0] * stride),
-          stride_(stride)
+          stride_(stride),
+          index_set_(size[0] * stride)
     {}
 
     /**
@@ -502,6 +505,8 @@ protected:
      * @param stride  stride of the rows (i.e. offset between the first
      *                  elements of two consecutive rows, expressed as the
      *                  number of matrix elements)
+     * @param index_set  IndexSet describing the indices on a global set held by
+     *                   this Dense object.
      *
      * @note If `values` is not an rvalue, not an array of ValueType, or is on
      *       the wrong executor, an internal copy will be created, and the
@@ -512,8 +517,41 @@ protected:
           ValuesArray &&values, size_type stride)
         : EnableLinOp<Dense>(exec, size),
           values_{exec, std::forward<ValuesArray>(values)},
-          stride_{stride}
+          stride_{stride},
+          index_set_{size[0] * stride}
     {
+        GKO_ENSURE_IN_BOUNDS((size[0] - 1) * stride + size[1] - 1,
+                             values_.get_num_elems());
+    }
+
+    /**
+     * Creates a Dense matrix from an already allocated (and initialized) array.
+     *
+     * @tparam ValuesArray  type of array of values
+     *
+     * @param exec  Executor associated to the matrix
+     * @param size  size of the matrix
+     * @param values  array of matrix values
+     * @param stride  stride of the rows (i.e. offset between the first
+     *                  elements of two consecutive rows, expressed as the
+     *                  number of matrix elements)
+     * @param index_set  IndexSet describing the indices on a global set held by
+     *                   this Dense object.
+     *
+     * @note If `values` is not an rvalue, not an array of ValueType, or is on
+     *       the wrong executor, an internal copy will be created, and the
+     *       original array data will not be used in the matrix.
+     */
+    template <typename ValuesArray>
+    Dense(std::shared_ptr<const Executor> exec, const dim<2> &size,
+          IndexSet<size_type> &index_set, ValuesArray &&values,
+          size_type stride)
+        : EnableLinOp<Dense>(exec, size),
+          values_{exec, std::forward<ValuesArray>(values)},
+          stride_{stride},
+          index_set_{index_set}
+    {
+        GKO_ASSERT(size[0] * stride <= index_set_.get_size());
         GKO_ENSURE_IN_BOUNDS((size[0] - 1) * stride + size[1] - 1,
                              values_.get_num_elems());
     }
@@ -530,14 +568,14 @@ protected:
     }
 
 
-    template <typename ExecType, typename IndexType, typename ValuesArray>
+    template <typename ExecType, typename ValuesArray>
     static std::unique_ptr<Dense> distribute_impl(ExecType &exec, dim<2> &size,
-                                                  IndexSet<IndexType> &row_set,
+                                                  IndexSet<size_type> &row_set,
                                                   ValuesArray &&values,
                                                   size_type stride)
     {
         auto max_index_size = row_set.get_largest_element_in_set() + 1;
-        auto values_set = gko::IndexSet<IndexType>{max_index_size * stride};
+        auto values_set = gko::IndexSet<size_type>{max_index_size * stride};
         auto mpi_exec = gko::as<MpiExecutor>(exec.get());
         auto my_rank = mpi_exec->get_my_rank();
         auto elem = row_set.begin();
@@ -545,8 +583,8 @@ protected:
             values_set.add_dense_row(*elem, stride);
             elem++;
         }
-        return Dense::create(exec, size, values.distribute(exec, values_set),
-                             stride);
+        return Dense::create(exec, size, row_set,
+                             values.distribute(exec, values_set), stride);
     }
 
 
@@ -615,6 +653,7 @@ protected:
     }
 
 private:
+    IndexSet<size_type> index_set_;
     Array<value_type> values_;
     size_type stride_;
 };  // namespace matrix
