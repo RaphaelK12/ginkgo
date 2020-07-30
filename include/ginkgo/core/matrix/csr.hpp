@@ -860,6 +860,7 @@ protected:
         size_type num_nonzeros = {},
         std::shared_ptr<strategy_type> strategy = std::make_shared<sparselib>())
         : EnableLinOp<Csr>(exec, size),
+          index_set_(size[0] + 1),
           values_(exec, num_nonzeros),
           col_idxs_(exec, num_nonzeros),
           row_ptrs_(exec, size[0] + 1),
@@ -893,6 +894,46 @@ protected:
         ValuesArray &&values, ColIdxsArray &&col_idxs, RowPtrsArray &&row_ptrs,
         std::shared_ptr<strategy_type> strategy = std::make_shared<sparselib>())
         : EnableLinOp<Csr>(exec, size),
+          index_set_(size[0] + 1),
+          values_{exec, std::forward<ValuesArray>(values)},
+          col_idxs_{exec, std::forward<ColIdxsArray>(col_idxs)},
+          row_ptrs_{exec, std::forward<RowPtrsArray>(row_ptrs)},
+          srow_(exec),
+          strategy_(strategy->copy())
+    {
+        GKO_ASSERT_EQ(values_.get_num_elems(), col_idxs_.get_num_elems());
+        GKO_ASSERT_EQ(this->get_size()[0] + 1, row_ptrs_.get_num_elems());
+        this->make_srow();
+    }
+
+    /**
+     * Creates a CSR matrix from already allocated (and initialized) row
+     * pointer, column index and value arrays.
+     *
+     * @tparam ValuesArray  type of `values` array
+     * @tparam ColIdxsArray  type of `col_idxs` array
+     * @tparam RowPtrsArray  type of `row_ptrs` array
+     *
+     * @param exec  Executor associated to the matrix
+     * @param size  size of the matrix
+     * @param values  array of matrix values
+     * @param col_idxs  array of column indexes
+     * @param row_ptrs  array of row pointers
+     *
+     * @note If one of `row_ptrs`, `col_idxs` or `values` is not an rvalue, not
+     *       an array of IndexType, IndexType and ValueType, respectively, or
+     *       is on the wrong executor, an internal copy of that array will be
+     *       created, and the original array data will not be used in the
+     *       matrix.
+     */
+    template <typename ValuesArray, typename ColIdxsArray,
+              typename RowPtrsArray>
+    Csr(std::shared_ptr<const Executor> exec, const dim<2> &size,
+        IndexSet<size_type> &index_set, ValuesArray &&values,
+        ColIdxsArray &&col_idxs, RowPtrsArray &&row_ptrs,
+        std::shared_ptr<strategy_type> strategy = std::make_shared<sparselib>())
+        : EnableLinOp<Csr>(exec, size),
+          index_set_(index_set),
           values_{exec, std::forward<ValuesArray>(values)},
           col_idxs_{exec, std::forward<ColIdxsArray>(col_idxs)},
           row_ptrs_{exec, std::forward<RowPtrsArray>(row_ptrs)},
@@ -908,7 +949,7 @@ protected:
     template <typename ExecType, typename ValuesArray, typename ColIdxsArray,
               typename RowPtrsArray>
     static std::unique_ptr<Csr> distribute_impl(
-        ExecType &exec, dim<2> &size, Array<size_type> &rows,
+        ExecType &exec, dim<2> &size, IndexSet<size_type> &row_set,
         ValuesArray &&values, ColIdxsArray &&col_idxs, RowPtrsArray &&row_ptrs,
         std::shared_ptr<strategy_type> strategy = std::make_shared<sparselib>())
     {
@@ -919,16 +960,12 @@ protected:
         auto my_rank = mpi_exec->get_my_rank();
         auto root_rank = mpi_exec->get_root_rank();
         auto updated_size = size;
-        rows.set_executor(exec->get_master());
-        itype num_rows = rows.get_num_elems();
+        itype num_rows = row_set.get_num_elems();
         itype total_num_rows = 0;
         if (my_rank == root_rank) {
             total_num_rows = row_ptrs.get_num_elems() - 1;
         }
         mpi_exec->broadcast(&total_num_rows, 1, root_rank);
-        auto row_set = gko::IndexSet<itype>(total_num_rows);
-        row_set.add_indices(rows.get_const_data(),
-                            rows.get_const_data() + num_rows);
 
         // TODO: Can possibly be moved to the exec instead of master.
         auto nnz_per_row = Array<itype>{sub_exec->get_master()};
@@ -954,9 +991,8 @@ protected:
                          num_nnz_per_row.get_const_data() + num_rows,
                          updated_row_ptrs.get_data() + 1);
         updated_row_ptrs.set_executor(exec);
-        auto max_index_size = std::max_element(
-            rows.get_const_data(), rows.get_const_data() + num_rows);
-        auto index_set = gko::IndexSet<itype>{(*max_index_size + 1) * size[1]};
+        auto max_index_size = row_set.get_largest_element_in_set();
+        auto index_set = gko::IndexSet<itype>{(max_index_size + 1) * size[1]};
         for (auto i = 0; i < num_rows; ++i) {
             index_set.add_subset(row_start.get_const_data()[i] -
                                      num_nnz_per_row.get_const_data()[i],
@@ -965,8 +1001,9 @@ protected:
         auto updated_values = values.distribute(exec, index_set);
         auto updated_col_idxs = col_idxs.distribute(exec, index_set);
         auto updated_strategy = strategy;
-        return Csr::create(exec, updated_size, updated_values, updated_col_idxs,
-                           updated_row_ptrs, updated_strategy);
+        return Csr::create(exec, updated_size, row_set, updated_values,
+                           updated_col_idxs, updated_row_ptrs,
+                           updated_strategy);
     }
 
 
@@ -1086,6 +1123,7 @@ protected:
     }
 
 private:
+    IndexSet<size_type> index_set_;
     Array<value_type> values_;
     Array<index_type> col_idxs_;
     Array<index_type> row_ptrs_;

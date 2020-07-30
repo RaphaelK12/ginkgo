@@ -277,6 +277,24 @@ public:
 
 
     /**
+     * Returns the index set of the Dense matrix
+     *
+     * @return the index_set
+     */
+    const IndexSet<size_type> get_index_set() noexcept { return index_set_; }
+
+
+    /**
+     * Returns the index set of the Dense matrix
+     *
+     * @return the index_set
+     */
+    void set_index_set(IndexSet<size_type> &index_set)
+    {
+        index_set_ = index_set;
+    }
+
+    /**
      * Returns array of values of the matrix.
      *
      * @return the array of values
@@ -491,8 +509,10 @@ protected:
         : EnableLinOp<Dense>(exec, size),
           values_(exec, size[0] * stride),
           stride_(stride),
-          index_set_(size[0] * stride)
-    {}
+          index_set_(size[0] + 1)
+    {
+        index_set_.add_subset(0, (size[0] + 1));
+    }
 
     /**
      * Creates a Dense matrix from an already allocated (and initialized) array.
@@ -518,8 +538,9 @@ protected:
         : EnableLinOp<Dense>(exec, size),
           values_{exec, std::forward<ValuesArray>(values)},
           stride_{stride},
-          index_set_{size[0] * stride}
+          index_set_{size[0] + 1}
     {
+        index_set_.add_subset(0, (size[0] + 1));
         GKO_ENSURE_IN_BOUNDS((size[0] - 1) * stride + size[1] - 1,
                              values_.get_num_elems());
     }
@@ -551,7 +572,10 @@ protected:
           stride_{stride},
           index_set_{index_set}
     {
-        GKO_ASSERT(size[0] * stride <= index_set_.get_size());
+        GKO_ASSERT(size[0] + 1 <= index_set_.get_size());
+        if (index_set_.get_num_subsets() == 0) {
+            index_set_.add_subset(0, size[0] + 1);
+        }
         GKO_ENSURE_IN_BOUNDS((size[0] - 1) * stride + size[1] - 1,
                              values_.get_num_elems());
     }
@@ -653,10 +677,10 @@ protected:
     }
 
 private:
-    IndexSet<size_type> index_set_;
     Array<value_type> values_;
     size_type stride_;
-};  // namespace matrix
+    IndexSet<size_type> index_set_;
+};
 
 
 }  // namespace matrix

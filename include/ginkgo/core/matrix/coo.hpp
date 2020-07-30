@@ -262,6 +262,7 @@ protected:
     Coo(std::shared_ptr<const Executor> exec, const dim<2> &size = dim<2>{},
         size_type num_nonzeros = {})
         : EnableLinOp<Coo>(exec, size),
+          index_set_(size[0] + 1),
           values_(exec, num_nonzeros),
           col_idxs_(exec, num_nonzeros),
           row_idxs_(exec, num_nonzeros)
@@ -292,6 +293,42 @@ protected:
     Coo(std::shared_ptr<const Executor> exec, const dim<2> &size,
         ValuesArray &&values, ColIdxsArray &&col_idxs, RowIdxsArray &&row_idxs)
         : EnableLinOp<Coo>(exec, size),
+          index_set_(size[0] + 1),
+          values_{exec, std::forward<ValuesArray>(values)},
+          col_idxs_{exec, std::forward<ColIdxsArray>(col_idxs)},
+          row_idxs_{exec, std::forward<RowIdxsArray>(row_idxs)}
+    {
+        GKO_ASSERT_EQ(values_.get_num_elems(), col_idxs_.get_num_elems());
+        GKO_ASSERT_EQ(values_.get_num_elems(), row_idxs_.get_num_elems());
+    }
+
+    /**
+     * Creates a COO matrix from already allocated (and initialized) row
+     * index, column index and value arrays.
+     *
+     * @tparam ValuesArray  type of `values` array
+     * @tparam ColIdxsArray  type of `col_idxs` array
+     * @tparam RowIdxArray  type of `row_idxs` array
+     *
+     * @param exec  Executor associated to the matrix
+     * @param size  size of the matrix
+     * @param values  array of matrix values
+     * @param col_idxs  array of column indexes
+     * @param row_idxs  array of row pointers
+     *
+     * @note If one of `row_idxs`, `col_idxs` or `values` is not an rvalue, not
+     *       an array of IndexType, IndexType and ValueType, respectively, or
+     *       is on the wrong executor, an internal copy of that array will be
+     *       created, and the original array data will not be used in the
+     *       matrix.
+     */
+    template <typename ValuesArray, typename ColIdxsArray,
+              typename RowIdxsArray>
+    Coo(std::shared_ptr<const Executor> exec, const dim<2> &size,
+        IndexSet<size_type> &index_set, ValuesArray &&values,
+        ColIdxsArray &&col_idxs, RowIdxsArray &&row_idxs)
+        : EnableLinOp<Coo>(exec, size),
+          index_set_(index_set),
           values_{exec, std::forward<ValuesArray>(values)},
           col_idxs_{exec, std::forward<ColIdxsArray>(col_idxs)},
           row_idxs_{exec, std::forward<RowIdxsArray>(row_idxs)}
@@ -304,17 +341,16 @@ protected:
               typename RowIdxsArray>
     static std::unique_ptr<Coo> distribute_impl(
         ExecType &exec, const dim<2> &global_size, const dim<2> &local_size,
-        Array<size_type> &rows, ValuesArray &&values, ColIdxsArray &&col_idxs,
-        RowIdxsArray &&row_idxs)
+        IndexSet<size_type> &row_set, ValuesArray &&values,
+        ColIdxsArray &&col_idxs, RowIdxsArray &&row_idxs)
     {
         using itype = index_type;
-        rows.set_executor(exec->get_master());
         auto mpi_exec = as<gko::MpiExecutor>(exec.get());
         auto sub_exec = exec->get_sub_executor();
         auto num_ranks = mpi_exec->get_num_ranks();
         auto my_rank = mpi_exec->get_my_rank();
         auto root_rank = mpi_exec->get_root_rank();
-        itype num_rows = rows.get_num_elems();
+        itype num_rows = row_set.get_num_elems();
         // Can also be the last element of the row_idx array as we sort the
         // row_idxs by row
         itype total_num_rows = global_size[0];
@@ -338,9 +374,6 @@ protected:
                              row_ptrs.get_data());
         }
         row_idxs.set_executor(sub_exec);
-        auto row_set = gko::IndexSet<itype>(total_num_rows);
-        row_set.add_indices(rows.get_const_data(),
-                            rows.get_const_data() + num_rows);
 
         // TODO: Can possibly be moved to the exec instead of master.
         auto nnz_per_row = Array<itype>{sub_exec->get_master()};
@@ -369,8 +402,8 @@ protected:
         auto updated_values = values.distribute(exec, index_set);
         auto updated_col_idxs = col_idxs.distribute(exec, index_set);
         auto updated_row_idxs = row_idxs.distribute(exec, index_set);
-        return Coo::create(exec, updated_size, updated_values, updated_col_idxs,
-                           updated_row_idxs);
+        return Coo::create(exec, updated_size, row_set, updated_values,
+                           updated_col_idxs, updated_row_idxs);
     }
 
     template <typename ExecType>
@@ -390,6 +423,7 @@ protected:
     void apply2_impl(const LinOp *alpha, const LinOp *b, LinOp *x) const;
 
 private:
+    IndexSet<size_type> index_set_;
     Array<value_type> values_;
     Array<index_type> col_idxs_;
     Array<index_type> row_idxs_;

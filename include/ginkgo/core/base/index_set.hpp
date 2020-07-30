@@ -108,6 +108,8 @@ public:
         subsets_ = other.subsets_;
         largest_subset_ = other.largest_subset_;
         index_space_size_ = other.index_space_size_;
+
+        return *this;
     }
 
     /**
@@ -132,6 +134,8 @@ public:
         other.index_space_size_ = 0;
         other.largest_subset_ = invalid_unsigned_int;
         merge();
+
+        return *this;
     }
 
 

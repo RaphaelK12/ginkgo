@@ -119,6 +119,17 @@ TYPED_TEST(Dense, CanBeConstructedWithSizeAndStride)
 }
 
 
+TYPED_TEST(Dense, KnowsItsIndexSet)
+{
+    auto m =
+        gko::matrix::Dense<TypeParam>::create(this->exec, gko::dim<2>{2, 3}, 4);
+
+    auto index_set = m->get_index_set();
+    ASSERT_EQ(index_set.get_num_subsets(), 1);
+    ASSERT_EQ(index_set.get_size(), 3);
+}
+
+
 TYPED_TEST(Dense, CanBeConstructedFromExistingData)
 {
     using value_type = typename TestFixture::value_type;

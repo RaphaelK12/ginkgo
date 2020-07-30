@@ -240,7 +240,7 @@ TYPED_TEST(DistributedCoo, CanDistributeData)
     value_type *local_values;
     index_type *local_col_idxs;
     index_type *local_row_idxs;
-    size_type *row_dist;
+    gko::IndexSet<size_type> row_dist{6};
     size_type num_rows;
     if (this->rank == 0) {
         // clang-format off
@@ -260,7 +260,7 @@ TYPED_TEST(DistributedCoo, CanDistributeData)
         local_values = new value_type[5]{1.0, 1.0, -1.0, 2.0, 1.5};
         local_col_idxs = new index_type[5]{0, 2, 4, 1, 4};
         local_row_idxs = new index_type[5]{0, 0, 0, 1, 1};
-        row_dist = new size_type[2]{0, 1};
+        row_dist.add_subset(0, 2);
         num_rows = 2;
         local_size = gko::dim<2>(num_rows, 5);
         // clang-format off
@@ -279,7 +279,7 @@ TYPED_TEST(DistributedCoo, CanDistributeData)
                                           5.0,  1.0, -3.0, 4.0, 7.0};
         local_col_idxs = new index_type[11]{0, 2, 4, 0, 1, 2, 3, 4, 0, 1, 4};
         local_row_idxs = new index_type[11]{2, 2, 2, 3, 3, 3, 3, 3, 4, 4, 4};
-        row_dist = new size_type[3]{2, 3, 4};
+        row_dist.add_subset(2, 5);
         num_rows = 3;
         local_size = gko::dim<2>(num_rows, 5);
         // clang-format off
@@ -297,8 +297,7 @@ TYPED_TEST(DistributedCoo, CanDistributeData)
     }
     global_size = gko::dim<2>(5, 5);
     mat = Mtx::create_and_distribute(
-        this->mpi_exec, global_size, local_size,
-        gko::Array<size_type>::view(this->sub_exec, num_rows, row_dist),
+        this->mpi_exec, global_size, local_size, row_dist,
         gko::Array<value_type>::view(this->sub_exec, 16, values),
         gko::Array<index_type>::view(this->sub_exec, 16, col_idxs),
         gko::Array<index_type>::view(this->sub_exec, 16, row_idxs));
@@ -308,7 +307,7 @@ TYPED_TEST(DistributedCoo, CanDistributeData)
     if (this->rank == 0) {
         delete values, row_idxs, col_idxs;
     }
-    delete local_values, local_row_idxs, local_col_idxs, row_dist;
+    delete local_values, local_row_idxs, local_col_idxs;
 }
 
 
@@ -329,7 +328,7 @@ TYPED_TEST(DistributedCoo, CanDistributeDataNonContiguously)
     value_type *local_values;
     index_type *local_col_idxs;
     index_type *local_row_idxs;
-    size_type *row_dist;
+    gko::IndexSet<size_type> row_dist{6};
     size_type num_rows;
     if (this->rank == 0) {
         // clang-format off
@@ -350,7 +349,8 @@ TYPED_TEST(DistributedCoo, CanDistributeDataNonContiguously)
             new value_type[8]{1.0, 1.0, -1.0, 0.5, -2.0, 3.0, 5.0, 1.0};
         local_col_idxs = new index_type[8]{0, 2, 4, 0, 1, 2, 3, 4};
         local_row_idxs = new index_type[8]{0, 0, 0, 3, 3, 3, 3, 3};
-        row_dist = new size_type[2]{0, 3};
+        row_dist.add_index(0);
+        row_dist.add_index(3);
         num_rows = 2;
         local_size = gko::dim<2>(num_rows, 5);
         // clang-format off
@@ -369,7 +369,9 @@ TYPED_TEST(DistributedCoo, CanDistributeDataNonContiguously)
             new value_type[8]{2.0, 1.5, -2.0, 4.0, 6.0, -3.0, 4.0, 7.0};
         local_col_idxs = new index_type[8]{1, 4, 0, 2, 4, 0, 1, 4};
         local_row_idxs = new index_type[8]{1, 1, 2, 2, 2, 4, 4, 4};
-        row_dist = new size_type[3]{1, 2, 4};
+        row_dist.add_index(1);
+        row_dist.add_index(2);
+        row_dist.add_index(4);
         num_rows = 3;
         local_size = gko::dim<2>(num_rows, 5);
         // clang-format off
@@ -386,8 +388,7 @@ TYPED_TEST(DistributedCoo, CanDistributeDataNonContiguously)
     }
     global_size = gko::dim<2>(5, 5);
     mat = Mtx::create_and_distribute(
-        this->mpi_exec, global_size, local_size,
-        gko::Array<size_type>::view(this->sub_exec, num_rows, row_dist),
+        this->mpi_exec, global_size, local_size, row_dist,
         gko::Array<value_type>::view(this->sub_exec, 16, values),
         gko::Array<index_type>::view(this->sub_exec, 16, col_idxs),
         gko::Array<index_type>::view(this->sub_exec, 16, row_idxs));
@@ -397,7 +398,7 @@ TYPED_TEST(DistributedCoo, CanDistributeDataNonContiguously)
     if (this->rank == 0) {
         delete values, row_idxs, col_idxs;
     }
-    delete local_values, local_row_idxs, local_col_idxs, row_dist;
+    delete local_values, local_row_idxs, local_col_idxs;
 }
 
 
@@ -421,7 +422,7 @@ TYPED_TEST(DistributedCoo, AppliesToDense)
     value_type *local_values;
     index_type *local_col_idxs;
     index_type *local_row_idxs;
-    size_type *row_dist;
+    gko::IndexSet<size_type> row_dist{6};
     size_type num_rows;
     value_type *vec_data;
     vec_data = new value_type[5]{-3.0, 3.0, -5.0, 5.0, 1.0};
@@ -446,7 +447,7 @@ TYPED_TEST(DistributedCoo, AppliesToDense)
         local_values = new value_type[5]{1.0, 1.0, -1.0, 2.0, 1.5};
         local_col_idxs = new index_type[5]{0, 2, 4, 1, 4};
         local_row_idxs = new index_type[5]{0, 0, 0, 1, 1};
-        row_dist = new size_type[2]{0, 1};
+        row_dist.add_subset(0, 2);
         num_rows = 2;
         local_size = gko::dim<2>(num_rows, 5);
         expected = DenseVec::create(this->sub_exec, gko::dim<2>(num_rows, 1));
@@ -466,7 +467,7 @@ TYPED_TEST(DistributedCoo, AppliesToDense)
                                           5.0,  1.0, -3.0, 4.0, 7.0};
         local_col_idxs = new index_type[11]{0, 2, 4, 0, 1, 2, 3, 4, 0, 1, 4};
         local_row_idxs = new index_type[11]{2, 2, 2, 3, 3, 3, 3, 3, 4, 4, 4};
-        row_dist = new size_type[3]{2, 3, 4};
+        row_dist.add_subset(2, 5);
         num_rows = 3;
         local_size = gko::dim<2>(num_rows, 5);
         expected = DenseVec::create(this->sub_exec, gko::dim<2>(num_rows, 1));
@@ -485,8 +486,7 @@ TYPED_TEST(DistributedCoo, AppliesToDense)
     }
     global_size = gko::dim<2>(5, 5);
     mat = Mtx::create_and_distribute(
-        this->mpi_exec, global_size, local_size,
-        gko::Array<size_type>::view(this->sub_exec, num_rows, row_dist),
+        this->mpi_exec, global_size, local_size, row_dist,
         gko::Array<value_type>::view(this->sub_exec, 16, values),
         gko::Array<index_type>::view(this->sub_exec, 16, col_idxs),
         gko::Array<index_type>::view(this->sub_exec, 16, row_idxs));
@@ -501,7 +501,7 @@ TYPED_TEST(DistributedCoo, AppliesToDense)
     if (this->rank == 0) {
         delete values, row_idxs, col_idxs;
     }
-    delete vec_data, local_values, local_row_idxs, local_col_idxs, row_dist;
+    delete vec_data, local_values, local_row_idxs, local_col_idxs;
 }
 
 
