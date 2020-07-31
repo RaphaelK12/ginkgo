@@ -188,6 +188,17 @@ protected:
         dense_x->add_scaled(alpha, x_clone.get());
     }
 
+    void distributed_apply_impl(const LinOp *b, LinOp *x) const override
+    {
+        this->apply_impl(b, x);
+    }
+
+    void distributed_apply_impl(const LinOp *alpha, const LinOp *b,
+                                const LinOp *beta, LinOp *x) const override
+    {
+        this->apply_impl(alpha, b, beta, x);
+    }
+
     explicit Overhead(std::shared_ptr<const Executor> exec)
         : EnableLinOp<Overhead>(std::move(exec))
     {}

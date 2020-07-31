@@ -130,6 +130,17 @@ protected:
     void apply_impl(const LinOp *alpha, const LinOp *b, const LinOp *beta,
                     LinOp *x) const override;
 
+    void distributed_apply_impl(const LinOp *b, LinOp *x) const override
+    {
+        this->apply_impl(b, x);
+    }
+
+    void distributed_apply_impl(const LinOp *alpha, const LinOp *b,
+                                const LinOp *beta, LinOp *x) const override
+    {
+        this->apply_impl(alpha, b, beta, x);
+    }
+
     /**
      * Generates the analysis structure from the system matrix and the right
      * hand side needed for the level solver.

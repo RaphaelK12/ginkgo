@@ -198,10 +198,16 @@ public:
      */
     LinOp *apply2(const LinOp *b, LinOp *x)
     {
-        this->validate_application_parameters(b, x);
         auto exec = this->get_executor();
-        this->apply2_impl(make_temporary_clone(exec, b).get(),
-                          make_temporary_clone(exec, x).get());
+        if (auto chk = dynamic_cast<const gko::MpiExecutor *>(exec.get())) {
+            this->validate_distributed_application_parameters(b, x);
+            this->distributed_apply2_impl(make_temporary_clone(exec, b).get(),
+                                          make_temporary_clone(exec, x).get());
+        } else {
+            this->validate_application_parameters(b, x);
+            this->apply2_impl(make_temporary_clone(exec, b).get(),
+                              make_temporary_clone(exec, x).get());
+        }
         return this;
     }
 
@@ -210,10 +216,16 @@ public:
      */
     const LinOp *apply2(const LinOp *b, LinOp *x) const
     {
-        this->validate_application_parameters(b, x);
         auto exec = this->get_executor();
-        this->apply2_impl(make_temporary_clone(exec, b).get(),
-                          make_temporary_clone(exec, x).get());
+        if (auto chk = dynamic_cast<const gko::MpiExecutor *>(exec.get())) {
+            this->validate_distributed_application_parameters(b, x);
+            this->distributed_apply2_impl(make_temporary_clone(exec, b).get(),
+                                          make_temporary_clone(exec, x).get());
+        } else {
+            this->validate_application_parameters(b, x);
+            this->apply2_impl(make_temporary_clone(exec, b).get(),
+                              make_temporary_clone(exec, x).get());
+        }
         return this;
     }
 
@@ -228,12 +240,20 @@ public:
      */
     LinOp *apply2(const LinOp *alpha, const LinOp *b, LinOp *x)
     {
-        this->validate_application_parameters(b, x);
         GKO_ASSERT_EQUAL_DIMENSIONS(alpha, dim<2>(1, 1));
         auto exec = this->get_executor();
-        this->apply2_impl(make_temporary_clone(exec, alpha).get(),
-                          make_temporary_clone(exec, b).get(),
-                          make_temporary_clone(exec, x).get());
+        if (auto chk = dynamic_cast<const gko::MpiExecutor *>(exec.get())) {
+            this->validate_distributed_application_parameters(b, x);
+            this->distributed_apply2_impl(
+                make_temporary_clone(exec, alpha).get(),
+                make_temporary_clone(exec, b).get(),
+                make_temporary_clone(exec, x).get());
+        } else {
+            this->validate_application_parameters(b, x);
+            this->apply2_impl(make_temporary_clone(exec, alpha).get(),
+                              make_temporary_clone(exec, b).get(),
+                              make_temporary_clone(exec, x).get());
+        }
         return this;
     }
 
@@ -242,12 +262,20 @@ public:
      */
     const LinOp *apply2(const LinOp *alpha, const LinOp *b, LinOp *x) const
     {
-        this->validate_application_parameters(b, x);
         GKO_ASSERT_EQUAL_DIMENSIONS(alpha, dim<2>(1, 1));
         auto exec = this->get_executor();
-        this->apply2_impl(make_temporary_clone(exec, alpha).get(),
-                          make_temporary_clone(exec, b).get(),
-                          make_temporary_clone(exec, x).get());
+        if (auto chk = dynamic_cast<const gko::MpiExecutor *>(exec.get())) {
+            this->validate_application_parameters(b, x);
+            this->distributed_apply2_impl(
+                make_temporary_clone(exec, alpha).get(),
+                make_temporary_clone(exec, b).get(),
+                make_temporary_clone(exec, x).get());
+        } else {
+            this->validate_distributed_application_parameters(b, x);
+            this->apply2_impl(make_temporary_clone(exec, alpha).get(),
+                              make_temporary_clone(exec, b).get(),
+                              make_temporary_clone(exec, x).get());
+        }
         return this;
     }
 
@@ -418,9 +446,31 @@ protected:
     void apply_impl(const LinOp *alpha, const LinOp *b, const LinOp *beta,
                     LinOp *x) const override;
 
+    void distributed_apply_impl(const LinOp *b, LinOp *x) const override
+    {
+        this->apply_impl(b, x);
+    }
+
+    void distributed_apply_impl(const LinOp *alpha, const LinOp *b,
+                                const LinOp *beta, LinOp *x) const override
+    {
+        this->apply_impl(alpha, b, beta, x);
+    }
+
     void apply2_impl(const LinOp *b, LinOp *x) const;
 
     void apply2_impl(const LinOp *alpha, const LinOp *b, LinOp *x) const;
+
+    void distributed_apply2_impl(const LinOp *b, LinOp *x) const
+    {
+        this->apply2_impl(b, x);
+    }
+
+    void distributed_apply2_impl(const LinOp *alpha, const LinOp *b,
+                                 LinOp *x) const
+    {
+        this->apply2_impl(alpha, b, x);
+    }
 
 private:
     IndexSet<size_type> index_set_;

@@ -72,6 +72,19 @@ protected:
         GKO_NOT_IMPLEMENTED;
     }
 
+    void distributed_apply_impl(const gko::LinOp *b,
+                                gko::LinOp *x) const override
+    {
+        GKO_NOT_IMPLEMENTED;
+    }
+
+    void distributed_apply_impl(const gko::LinOp *alpha, const gko::LinOp *b,
+                                const gko::LinOp *beta,
+                                gko::LinOp *x) const override
+    {
+        GKO_NOT_IMPLEMENTED;
+    }
+
     CuspBase(std::shared_ptr<const gko::Executor> exec,
              const gko::dim<2> &size = gko::dim<2>{})
         : gko::LinOp(exec, size)

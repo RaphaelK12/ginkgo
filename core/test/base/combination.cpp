@@ -55,6 +55,17 @@ struct DummyOperator : public gko::EnableLinOp<DummyOperator> {
     void apply_impl(const LinOp *alpha, const LinOp *b, const LinOp *beta,
                     LinOp *x) const override
     {}
+
+    void distributed_apply_impl(const LinOp *b, LinOp *x) const override
+    {
+        this->apply_impl(b, x);
+    }
+
+    void distributed_apply_impl(const LinOp *alpha, const LinOp *b,
+                                const LinOp *beta, LinOp *x) const override
+    {
+        this->apply_impl(alpha, b, beta, x);
+    }
 };
 
 

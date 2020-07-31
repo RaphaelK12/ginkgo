@@ -78,6 +78,19 @@ protected:
         last_beta_access = beta->get_executor();
         last_x_access = x->get_executor();
     }
+
+    void distributed_apply_impl(const gko::LinOp *b,
+                                gko::LinOp *x) const override
+    {
+        this->apply_impl(b, x);
+    }
+
+    void distributed_apply_impl(const gko::LinOp *alpha, const gko::LinOp *b,
+                                const gko::LinOp *beta,
+                                gko::LinOp *x) const override
+    {
+        this->apply_impl(alpha, b, beta, x);
+    }
 };
 
 
@@ -272,6 +285,19 @@ protected:
     void apply_impl(const gko::LinOp *alpha, const gko::LinOp *b,
                     const gko::LinOp *beta, gko::LinOp *x) const override
     {}
+
+    void distributed_apply_impl(const gko::LinOp *b,
+                                gko::LinOp *x) const override
+    {
+        this->apply_impl(b, x);
+    }
+
+    void distributed_apply_impl(const gko::LinOp *alpha, const gko::LinOp *b,
+                                const gko::LinOp *beta,
+                                gko::LinOp *x) const override
+    {
+        this->apply_impl(alpha, b, beta, x);
+    }
 };
 
 

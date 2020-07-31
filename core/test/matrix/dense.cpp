@@ -130,6 +130,26 @@ TYPED_TEST(Dense, KnowsItsIndexSet)
 }
 
 
+TYPED_TEST(Dense, CanSetIndexSet)
+{
+    auto m =
+        gko::matrix::Dense<TypeParam>::create(this->exec, gko::dim<2>{2, 3}, 4);
+
+    auto index_set = m->get_index_set();
+    ASSERT_EQ(index_set.get_num_subsets(), 1);
+    ASSERT_EQ(index_set.get_size(), 3);
+
+    gko::IndexSet<gko::size_type> new_idx_set{10};
+    new_idx_set.add_subset(1, 4);
+    new_idx_set.add_subset(5, 7);
+    m->set_index_set(new_idx_set);
+
+    auto index_set2 = m->get_index_set();
+    ASSERT_EQ(index_set2.get_num_subsets(), 2);
+    ASSERT_EQ(index_set2.get_size(), 10);
+}
+
+
 TYPED_TEST(Dense, CanBeConstructedFromExistingData)
 {
     using value_type = typename TestFixture::value_type;

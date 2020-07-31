@@ -66,6 +66,17 @@ protected:
         GKO_NOT_IMPLEMENTED;
     }
 
+    void distributed_apply_impl(const LinOp *b, LinOp *x) const override
+    {
+        GKO_NOT_IMPLEMENTED;
+    }
+
+    void distributed_apply_impl(const LinOp *alpha, const LinOp *b,
+                                const LinOp *beta, LinOp *x) const override
+    {
+        GKO_NOT_IMPLEMENTED;
+    }
+
     HipspBase(std::shared_ptr<const gko::Executor> exec,
               const gko::dim<2> &size = gko::dim<2>{})
         : gko::LinOp(exec, size)
