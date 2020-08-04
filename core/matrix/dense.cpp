@@ -333,6 +333,7 @@ void Dense<ValueType>::convert_to(
     result->values_ = this->values_;
     result->stride_ = this->stride_;
     result->set_size(this->get_size());
+    result->set_global_size(this->get_global_size());
 }
 
 
@@ -689,7 +690,7 @@ std::unique_ptr<Dense<ValueType>> Dense<ValueType>::collect_on_root(
     if (my_rank == root_rank) {
         gathered_dense =
             Dense::create(exec, gko::dim<2>(global_num_rows, mat_size[1]),
-                          gathered_array, mat_stride);
+                          row_set, gathered_array, mat_stride);
     }
     return std::move(gathered_dense);
 }
@@ -725,7 +726,7 @@ std::unique_ptr<Dense<ValueType>> Dense<ValueType>::collect_on_all(
     auto gathered_array =
         this->get_const_values_array().collect_on_all(exec, index_set);
     auto gathered_dense =
-        Dense::create(exec, gko::dim<2>(global_num_rows, mat_size[1]),
+        Dense::create(exec, gko::dim<2>(global_num_rows, mat_size[1]), row_set,
                       gathered_array, mat_stride);
     return std::move(gathered_dense);
 }

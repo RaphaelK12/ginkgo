@@ -175,7 +175,8 @@ protected:
     explicit Fcg(const Factory *factory,
                  std::shared_ptr<const LinOp> system_matrix)
         : EnableLinOp<Fcg>(factory->get_executor(),
-                           gko::transpose(system_matrix->get_size())),
+                           gko::transpose(system_matrix->get_size()),
+                           gko::transpose(system_matrix->get_global_size())),
           parameters_{factory->get_parameters()},
           system_matrix_{std::move(system_matrix)}
     {

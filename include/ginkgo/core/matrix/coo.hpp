@@ -289,7 +289,7 @@ protected:
      */
     Coo(std::shared_ptr<const Executor> exec, const dim<2> &size = dim<2>{},
         size_type num_nonzeros = {})
-        : EnableLinOp<Coo>(exec, size),
+        : EnableLinOp<Coo>(exec, size, size),
           index_set_(size[0] + 1),
           values_(exec, num_nonzeros),
           col_idxs_(exec, num_nonzeros),
@@ -320,7 +320,7 @@ protected:
               typename RowIdxsArray>
     Coo(std::shared_ptr<const Executor> exec, const dim<2> &size,
         ValuesArray &&values, ColIdxsArray &&col_idxs, RowIdxsArray &&row_idxs)
-        : EnableLinOp<Coo>(exec, size),
+        : EnableLinOp<Coo>(exec, size, size),
           index_set_(size[0] + 1),
           values_{exec, std::forward<ValuesArray>(values)},
           col_idxs_{exec, std::forward<ColIdxsArray>(col_idxs)},
@@ -355,12 +355,13 @@ protected:
     Coo(std::shared_ptr<const Executor> exec, const dim<2> &size,
         IndexSet<size_type> &index_set, ValuesArray &&values,
         ColIdxsArray &&col_idxs, RowIdxsArray &&row_idxs)
-        : EnableLinOp<Coo>(exec, size),
+        : EnableLinOp<Coo>(exec, size, size),
           index_set_(index_set),
           values_{exec, std::forward<ValuesArray>(values)},
           col_idxs_{exec, std::forward<ColIdxsArray>(col_idxs)},
           row_idxs_{exec, std::forward<RowIdxsArray>(row_idxs)}
     {
+        this->set_size(gko::dim<2>(index_set_.get_num_elems(), size[1]));
         GKO_ASSERT_EQ(values_.get_num_elems(), col_idxs_.get_num_elems());
         GKO_ASSERT_EQ(values_.get_num_elems(), row_idxs_.get_num_elems());
     }
@@ -368,9 +369,8 @@ protected:
     template <typename ExecType, typename ValuesArray, typename ColIdxsArray,
               typename RowIdxsArray>
     static std::unique_ptr<Coo> distribute_impl(
-        ExecType &exec, const dim<2> &global_size, const dim<2> &local_size,
-        IndexSet<size_type> &row_set, ValuesArray &&values,
-        ColIdxsArray &&col_idxs, RowIdxsArray &&row_idxs)
+        ExecType &exec, const dim<2> &global_size, IndexSet<size_type> &row_set,
+        ValuesArray &&values, ColIdxsArray &&col_idxs, RowIdxsArray &&row_idxs)
     {
         using itype = index_type;
         auto mpi_exec = as<gko::MpiExecutor>(exec.get());
@@ -420,7 +420,6 @@ protected:
         auto num_nnz_per_row =
             nnz_per_row.distribute(exec->get_master(), row_set);
         auto row_start = row_ptr_clone.distribute(exec->get_master(), row_set);
-        auto updated_size = local_size;
         auto index_set = gko::IndexSet<itype>{size_type(total_num_nnz)};
         for (auto i = 0; i < num_rows; ++i) {
             index_set.add_subset(row_start.get_const_data()[i] -
@@ -430,7 +429,7 @@ protected:
         auto updated_values = values.distribute(exec, index_set);
         auto updated_col_idxs = col_idxs.distribute(exec, index_set);
         auto updated_row_idxs = row_idxs.distribute(exec, index_set);
-        return Coo::create(exec, updated_size, row_set, updated_values,
+        return Coo::create(exec, global_size, row_set, updated_values,
                            updated_col_idxs, updated_row_idxs);
     }
 

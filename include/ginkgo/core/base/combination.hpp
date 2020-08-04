@@ -135,6 +135,7 @@ protected:
             GKO_ASSERT_EQUAL_DIMENSIONS(c, dim<2>(1, 1));
         }
         this->set_size(operators_[0]->get_size());
+        this->set_global_size(operators_[0]->get_global_size());
         for (const auto &o : operators_) {
             GKO_ASSERT_EQUAL_DIMENSIONS(o, this->get_size());
         }
@@ -176,7 +177,8 @@ protected:
      */
     explicit Combination(std::shared_ptr<const LinOp> coef,
                          std::shared_ptr<const LinOp> oper)
-        : EnableLinOp<Combination>(oper->get_executor(), oper->get_size()),
+        : EnableLinOp<Combination>(oper->get_executor(), oper->get_size(),
+                                   oper->get_global_size()),
           coefficients_{coef},
           operators_{oper}
     {}

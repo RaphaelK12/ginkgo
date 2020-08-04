@@ -196,7 +196,7 @@ protected:
      */
     SparsityCsr(std::shared_ptr<const Executor> exec,
                 const dim<2> &size = dim<2>{}, size_type num_nonzeros = {})
-        : EnableLinOp<SparsityCsr>(exec, size),
+        : EnableLinOp<SparsityCsr>(exec, size, size),
           col_idxs_(exec, num_nonzeros),
           row_ptrs_(exec, size[0] + 1),
           value_(exec, {one<ValueType>()})
@@ -225,7 +225,7 @@ protected:
     SparsityCsr(std::shared_ptr<const Executor> exec, const dim<2> &size,
                 ColIdxsArray &&col_idxs, RowPtrsArray &&row_ptrs,
                 value_type value = one<ValueType>())
-        : EnableLinOp<SparsityCsr>(exec, size),
+        : EnableLinOp<SparsityCsr>(exec, size, size),
           col_idxs_{exec, std::forward<ColIdxsArray>(col_idxs)},
           row_ptrs_{exec, std::forward<RowPtrsArray>(row_ptrs)},
           value_{exec, {value}}
@@ -242,7 +242,8 @@ protected:
      */
     SparsityCsr(std::shared_ptr<const Executor> exec,
                 std::shared_ptr<const LinOp> matrix)
-        : EnableLinOp<SparsityCsr>(exec, matrix->get_size())
+        : EnableLinOp<SparsityCsr>(exec, matrix->get_size(),
+                                   matrix->get_global_size())
     {
         auto tmp_ = copy_and_convert_to<SparsityCsr>(exec, matrix);
         this->copy_from(std::move(tmp_.get()));

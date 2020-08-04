@@ -194,6 +194,7 @@ TYPED_TEST(DistributedCsr, CanBeEmpty)
 TYPED_TEST(DistributedCsr, KnowsItsSize)
 {
     ASSERT_EQ(this->mtx->get_size(), gko::dim<2>(2, 3));
+    ASSERT_EQ(this->mtx->get_global_size(), gko::dim<2>(2, 3));
     ASSERT_EQ(this->mtx->get_num_stored_elements(), 4);
 }
 
@@ -223,6 +224,8 @@ TYPED_TEST(DistributedCsr, CanBeConstructedFromExistingExecutorData)
         gko::Array<index_type>::view(this->sub_exec, 4, row_ptrs),
         std::make_shared<typename Mtx::load_balance>(2));
 
+    ASSERT_EQ(mtx->get_size(), gko::dim<2>(3, 2));
+    ASSERT_EQ(mtx->get_global_size(), gko::dim<2>(3, 2));
     ASSERT_EQ(mtx->get_num_srow_elements(), 1);
     ASSERT_EQ(mtx->get_const_values(), values);
     ASSERT_EQ(mtx->get_const_col_idxs(), col_idxs);
@@ -250,6 +253,7 @@ TYPED_TEST(DistributedCsr, CanDistributeData)
     index_type *local_row_ptrs;
     gko::IndexSet<size_type> row_dist{6};
     size_type num_rows;
+    auto global_size = gko::dim<2>(5, 5);
     if (this->rank == 0) {
         // clang-format off
         /*  1.0  0.0  1.0  0.0 -1.0 ]
@@ -305,7 +309,7 @@ TYPED_TEST(DistributedCsr, CanDistributeData)
             std::make_shared<typename Mtx::load_balance>(2));
     }
     mat = Mtx::create_and_distribute(
-        this->mpi_exec, local_size, row_dist,
+        this->mpi_exec, global_size, row_dist,
         gko::Array<value_type>::view(this->sub_exec, 16, values),
         gko::Array<index_type>::view(this->sub_exec, 16, col_idxs),
         gko::Array<index_type>::view(this->sub_exec, 6, row_ptrs),
@@ -338,6 +342,7 @@ TYPED_TEST(DistributedCsr, CanDistributeDataNonContiguously)
     index_type *local_row_ptrs;
     gko::IndexSet<size_type> row_dist{6};
     size_type num_rows;
+    auto global_size = gko::dim<2>(5, 5);
     if (this->rank == 0) {
         // clang-format off
         /*  1.0  0.0  1.0  0.0 -1.0 ] rank 0
@@ -396,7 +401,7 @@ TYPED_TEST(DistributedCsr, CanDistributeDataNonContiguously)
             std::make_shared<typename Mtx::load_balance>(2));
     }
     mat = Mtx::create_and_distribute(
-        this->mpi_exec, local_size, row_dist,
+        this->mpi_exec, global_size, row_dist,
         gko::Array<value_type>::view(this->sub_exec, 16, values),
         gko::Array<index_type>::view(this->sub_exec, 16, col_idxs),
         gko::Array<index_type>::view(this->sub_exec, 6, row_ptrs),
@@ -437,6 +442,7 @@ TYPED_TEST(DistributedCsr, AppliesToDense)
     dvec = DenseVec::create(
         this->sub_exec, gko::dim<2>(5, 1),
         gko::Array<value_type>::view(this->sub_exec, 5, vec_data), 1);
+    auto global_size = gko::dim<2>(5, 5);
     if (this->rank == 0) {
         // clang-format off
         /*  1.0  0.0  1.0  0.0 -1.0 ] rank 0
@@ -497,7 +503,7 @@ TYPED_TEST(DistributedCsr, AppliesToDense)
             std::make_shared<typename Mtx::load_balance>(2));
     }
     mat = Mtx::create_and_distribute(
-        this->mpi_exec, local_size, row_dist,
+        this->mpi_exec, global_size, row_dist,
         gko::Array<value_type>::view(this->sub_exec, 16, values),
         gko::Array<index_type>::view(this->sub_exec, 16, col_idxs),
         gko::Array<index_type>::view(this->sub_exec, 6, row_ptrs),

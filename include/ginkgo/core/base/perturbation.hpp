@@ -141,7 +141,8 @@ protected:
                           std::shared_ptr<const LinOp> basis,
                           std::shared_ptr<const LinOp> projector)
         : EnableLinOp<Perturbation>(basis->get_executor(),
-                                    gko::dim<2>{basis->get_size()[0]}),
+                                    gko::dim<2>{basis->get_size()[0]},
+                                    gko::dim<2>{basis->get_global_size()[0]}),
           scalar_{std::move(scalar)},
           basis_{std::move(basis)},
           projector_{std::move(projector)}

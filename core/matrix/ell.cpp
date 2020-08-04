@@ -120,6 +120,7 @@ void Ell<ValueType, IndexType>::convert_to(
     result->num_stored_elements_per_row_ = this->num_stored_elements_per_row_;
     result->stride_ = this->stride_;
     result->set_size(this->get_size());
+    result->set_global_size(this->get_global_size());
 }
 
 

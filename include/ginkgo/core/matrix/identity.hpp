@@ -94,7 +94,7 @@ protected:
      * @param size  size of the matrix
      */
     Identity(std::shared_ptr<const Executor> exec, size_type size)
-        : EnableLinOp<Identity>(exec, dim<2>{size})
+        : EnableLinOp<Identity>(exec, dim<2>{size}, dim<2>{size})
     {}
 
     void apply_impl(const LinOp *b, LinOp *x) const override;

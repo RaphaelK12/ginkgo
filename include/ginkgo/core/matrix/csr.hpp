@@ -638,6 +638,7 @@ public:
         result->row_ptrs_ = this->row_ptrs_;
         result->srow_ = this->srow_;
         result->set_size(this->get_size());
+        result->set_global_size(this->get_global_size());
         if (!same_executor) {
             convert_strategy_helper(result);
         } else {
@@ -859,7 +860,7 @@ protected:
     Csr(std::shared_ptr<const Executor> exec, const dim<2> &size = dim<2>{},
         size_type num_nonzeros = {},
         std::shared_ptr<strategy_type> strategy = std::make_shared<sparselib>())
-        : EnableLinOp<Csr>(exec, size),
+        : EnableLinOp<Csr>(exec, size, size),
           index_set_(size[0] + 1),
           values_(exec, num_nonzeros),
           col_idxs_(exec, num_nonzeros),
@@ -893,7 +894,7 @@ protected:
     Csr(std::shared_ptr<const Executor> exec, const dim<2> &size,
         ValuesArray &&values, ColIdxsArray &&col_idxs, RowPtrsArray &&row_ptrs,
         std::shared_ptr<strategy_type> strategy = std::make_shared<sparselib>())
-        : EnableLinOp<Csr>(exec, size),
+        : EnableLinOp<Csr>(exec, size, size),
           index_set_(size[0] + 1),
           values_{exec, std::forward<ValuesArray>(values)},
           col_idxs_{exec, std::forward<ColIdxsArray>(col_idxs)},
@@ -932,7 +933,7 @@ protected:
         IndexSet<size_type> &index_set, ValuesArray &&values,
         ColIdxsArray &&col_idxs, RowPtrsArray &&row_ptrs,
         std::shared_ptr<strategy_type> strategy = std::make_shared<sparselib>())
-        : EnableLinOp<Csr>(exec, size),
+        : EnableLinOp<Csr>(exec, size, size),
           index_set_(index_set),
           values_{exec, std::forward<ValuesArray>(values)},
           col_idxs_{exec, std::forward<ColIdxsArray>(col_idxs)},
@@ -941,6 +942,7 @@ protected:
           strategy_(strategy->copy())
     {
         GKO_ASSERT_EQ(values_.get_num_elems(), col_idxs_.get_num_elems());
+        this->set_size(dim<2>(index_set_.get_num_elems(), size[1]));
         GKO_ASSERT_EQ(this->get_size()[0] + 1, row_ptrs_.get_num_elems());
         this->make_srow();
     }
@@ -949,7 +951,7 @@ protected:
     template <typename ExecType, typename ValuesArray, typename ColIdxsArray,
               typename RowPtrsArray>
     static std::unique_ptr<Csr> distribute_impl(
-        ExecType &exec, dim<2> &size, IndexSet<size_type> &row_set,
+        ExecType &exec, dim<2> &global_size, IndexSet<size_type> &row_set,
         ValuesArray &&values, ColIdxsArray &&col_idxs, RowPtrsArray &&row_ptrs,
         std::shared_ptr<strategy_type> strategy = std::make_shared<sparselib>())
     {
@@ -959,7 +961,6 @@ protected:
         auto num_ranks = mpi_exec->get_num_ranks();
         auto my_rank = mpi_exec->get_my_rank();
         auto root_rank = mpi_exec->get_root_rank();
-        auto updated_size = size;
         itype num_rows = row_set.get_num_elems();
         itype total_num_rows = 0;
         if (my_rank == root_rank) {
@@ -992,7 +993,8 @@ protected:
                          updated_row_ptrs.get_data() + 1);
         updated_row_ptrs.set_executor(exec);
         auto max_index_size = row_set.get_largest_element_in_set();
-        auto index_set = gko::IndexSet<itype>{(max_index_size + 1) * size[1]};
+        auto index_set =
+            gko::IndexSet<itype>{(max_index_size + 1) * global_size[1]};
         for (auto i = 0; i < num_rows; ++i) {
             index_set.add_subset(row_start.get_const_data()[i] -
                                      num_nnz_per_row.get_const_data()[i],
@@ -1001,7 +1003,7 @@ protected:
         auto updated_values = values.distribute(exec, index_set);
         auto updated_col_idxs = col_idxs.distribute(exec, index_set);
         auto updated_strategy = strategy;
-        return Csr::create(exec, updated_size, row_set, updated_values,
+        return Csr::create(exec, global_size, row_set, updated_values,
                            updated_col_idxs, updated_row_ptrs,
                            updated_strategy);
     }

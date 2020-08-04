@@ -117,6 +117,7 @@ void Coo<ValueType, IndexType>::convert_to(
     result->row_idxs_ = this->row_idxs_;
     result->col_idxs_ = this->col_idxs_;
     result->set_size(this->get_size());
+    result->set_global_size(this->get_global_size());
 }
 
 

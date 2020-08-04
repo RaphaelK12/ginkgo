@@ -152,7 +152,7 @@ protected:
      */
     Permutation(std::shared_ptr<const Executor> exec, const dim<2> &size,
                 const mask_type &enabled_permute = row_permute)
-        : EnableLinOp<Permutation>(exec, size),
+        : EnableLinOp<Permutation>(exec, size, size),
           permutation_(exec, size[0]),
           row_size_(size[0]),
           col_size_(size[1]),
@@ -178,7 +178,7 @@ protected:
     Permutation(std::shared_ptr<const Executor> exec, const dim<2> &size,
                 IndicesArray &&permutation_indices,
                 const mask_type &enabled_permute = row_permute)
-        : EnableLinOp<Permutation>(exec, size),
+        : EnableLinOp<Permutation>(exec, size, size),
           permutation_{exec, std::forward<IndicesArray>(permutation_indices)},
           row_size_(size[0]),
           col_size_(size[1]),

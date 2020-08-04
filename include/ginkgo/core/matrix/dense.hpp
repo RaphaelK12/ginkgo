@@ -285,13 +285,15 @@ public:
 
 
     /**
-     * Returns the index set of the Dense matrix
+     * Returns the index set of the Dense matrix. Setting the index set also
+     * sets the size.
      *
      * @return the index_set
      */
     void set_index_set(IndexSet<size_type> &index_set)
     {
         index_set_ = index_set;
+        this->set_size(dim<2>(index_set_.get_num_elems(), this->get_size()[1]));
     }
 
     /**
@@ -506,12 +508,39 @@ protected:
      */
     Dense(std::shared_ptr<const Executor> exec, const dim<2> &size,
           size_type stride)
-        : EnableLinOp<Dense>(exec, size),
+        : EnableLinOp<Dense>(exec, size, size),
           values_(exec, size[0] * stride),
           stride_(stride),
           index_set_(size[0] + 1)
     {
         index_set_.add_subset(0, (size[0] + 1));
+    }
+
+    /**
+     * Creates an uninitialized Dense matrix of the specified size.
+     *
+     * @param exec  Executor associated to the matrix
+     * @param size  size of the matrix
+     * @param stride  stride of the rows (i.e. offset between the first
+     *                  elements of two consecutive rows, expressed as the
+     *                  number of matrix elements)
+     * @param index_set  IndexSet describing the indices on a global set held by
+     *                   this Dense object.
+     */
+    Dense(std::shared_ptr<const Executor> exec, const dim<2> &size,
+          IndexSet<size_type> index_set, size_type stride)
+        : EnableLinOp<Dense>(exec, size, size),
+          values_(exec,
+                  (index_set.get_num_elems() == 0 ? size[0]
+                                                  : index_set.get_num_elems()) *
+                      stride),
+          stride_(stride),
+          index_set_(index_set)
+    {
+        if (index_set_.get_num_subsets() == 0) {
+            index_set_.add_subset(0, (size[0] + 1));
+        }
+        this->set_size(dim<2>(index_set_.get_num_elems(), size[1]));
     }
 
     /**
@@ -535,7 +564,7 @@ protected:
     template <typename ValuesArray>
     Dense(std::shared_ptr<const Executor> exec, const dim<2> &size,
           ValuesArray &&values, size_type stride)
-        : EnableLinOp<Dense>(exec, size),
+        : EnableLinOp<Dense>(exec, size, size),
           values_{exec, std::forward<ValuesArray>(values)},
           stride_{stride},
           index_set_{size[0] + 1}
@@ -565,18 +594,19 @@ protected:
      */
     template <typename ValuesArray>
     Dense(std::shared_ptr<const Executor> exec, const dim<2> &size,
-          IndexSet<size_type> &index_set, ValuesArray &&values,
-          size_type stride)
-        : EnableLinOp<Dense>(exec, size),
+          IndexSet<size_type> index_set, ValuesArray &&values, size_type stride)
+        : EnableLinOp<Dense>(exec, size, size),
           values_{exec, std::forward<ValuesArray>(values)},
           stride_{stride},
           index_set_{index_set}
     {
-        GKO_ASSERT(size[0] + 1 <= index_set_.get_size());
         if (index_set_.get_num_subsets() == 0) {
             index_set_.add_subset(0, size[0] + 1);
         }
-        GKO_ENSURE_IN_BOUNDS((size[0] - 1) * stride + size[1] - 1,
+        this->set_size(dim<2>(index_set_.get_num_elems(), size[1]));
+        auto local_size = this->get_size();
+        GKO_ASSERT(local_size[0] + 1 <= index_set_.get_size());
+        GKO_ENSURE_IN_BOUNDS((local_size[0] - 1) * stride + local_size[1] - 1,
                              values_.get_num_elems());
     }
 
@@ -594,7 +624,7 @@ protected:
 
     template <typename ExecType, typename ValuesArray>
     static std::unique_ptr<Dense> distribute_impl(ExecType &exec, dim<2> &size,
-                                                  IndexSet<size_type> &row_set,
+                                                  IndexSet<size_type> row_set,
                                                   ValuesArray &&values,
                                                   size_type stride)
     {
@@ -609,6 +639,16 @@ protected:
         }
         return Dense::create(exec, size, row_set,
                              values.distribute(exec, values_set), stride);
+    }
+
+
+    template <typename ExecType>
+    static std::unique_ptr<Dense> distribute_impl(ExecType &exec,
+                                                  const dim<2> &size,
+                                                  IndexSet<size_type> index_set,
+                                                  size_type stride)
+    {
+        return Dense::create(exec, size, index_set, stride);
     }
 
 
@@ -771,8 +811,8 @@ std::unique_ptr<Matrix> initialize_and_distribute(
     auto num_ranks = mpi_exec->get_num_ranks();
     auto my_rank = mpi_exec->get_my_rank();
     auto num_rows = row_set.get_num_elems();
-    auto tmp = dense::create(mpi_exec->get_sub_executor()->get_master(),
-                             dim<2>{num_rows, 1}, stride);
+    auto tmp = dense::create(exec->get_master(), dim<2>{vals.size(), 1},
+                             row_set, stride);
     size_type idx = 0;
     size_type l_idx = 0;
     for (const auto &elem : vals) {
@@ -782,8 +822,7 @@ std::unique_ptr<Matrix> initialize_and_distribute(
         }
         ++idx;
     }
-    auto mtx = Matrix::create(mpi_exec->get_sub_executor(),
-                              std::forward<TArgs>(create_args)...);
+    auto mtx = Matrix::create(exec, std::forward<TArgs>(create_args)...);
     tmp->move_to(mtx.get());
     return mtx;
 }
@@ -902,9 +941,10 @@ std::unique_ptr<Matrix> initialize_and_distribute(
     auto num_ranks = mpi_exec->get_num_ranks();
     auto my_rank = mpi_exec->get_my_rank();
     size_type num_rows = row_set.get_num_elems();
-    size_type num_cols = num_rows > 0 ? begin(vals)->size() : 1;
-    auto tmp = dense::create(mpi_exec->get_sub_executor()->get_master(),
-                             dim<2>{num_rows, num_cols}, stride);
+    size_type global_num_rows = vals.size();
+    size_type num_cols = global_num_rows > 0 ? begin(vals)->size() : 1;
+    auto tmp = dense::create(
+        exec->get_master(), dim<2>{global_num_rows, num_cols}, row_set, stride);
     size_type ridx = 0;
     size_type local_ridx = 0;
     for (const auto &row : vals) {
@@ -918,8 +958,7 @@ std::unique_ptr<Matrix> initialize_and_distribute(
         }
         ++ridx;
     }
-    auto mtx = Matrix::create(mpi_exec->get_sub_executor(),
-                              std::forward<TArgs>(create_args)...);
+    auto mtx = Matrix::create(exec, std::forward<TArgs>(create_args)...);
     tmp->move_to(mtx.get());
     return mtx;
 }

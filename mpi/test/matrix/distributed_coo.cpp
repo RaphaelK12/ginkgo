@@ -188,6 +188,7 @@ TYPED_TEST(DistributedCoo, CanBeEmpty)
 TYPED_TEST(DistributedCoo, KnowsItsSize)
 {
     ASSERT_EQ(this->mtx->get_size(), gko::dim<2>(2, 3));
+    ASSERT_EQ(this->mtx->get_global_size(), gko::dim<2>(2, 3));
     ASSERT_EQ(this->mtx->get_num_stored_elements(), 4);
 }
 
@@ -216,6 +217,8 @@ TYPED_TEST(DistributedCoo, CanBeConstructedFromExistingExecutorData)
         gko::Array<index_type>::view(this->sub_exec, 4, col_idxs),
         gko::Array<index_type>::view(this->sub_exec, 4, row_idxs));
 
+    ASSERT_EQ(mtx->get_global_size(), gko::dim<2>(3, 2));
+    ASSERT_EQ(mtx->get_size(), gko::dim<2>(3, 2));
     ASSERT_EQ(mtx->get_const_values(), values);
     ASSERT_EQ(mtx->get_const_col_idxs(), col_idxs);
     ASSERT_EQ(mtx->get_const_row_idxs(), row_idxs);
@@ -297,7 +300,7 @@ TYPED_TEST(DistributedCoo, CanDistributeData)
     }
     global_size = gko::dim<2>(5, 5);
     mat = Mtx::create_and_distribute(
-        this->mpi_exec, global_size, local_size, row_dist,
+        this->mpi_exec, global_size, row_dist,
         gko::Array<value_type>::view(this->sub_exec, 16, values),
         gko::Array<index_type>::view(this->sub_exec, 16, col_idxs),
         gko::Array<index_type>::view(this->sub_exec, 16, row_idxs));
@@ -388,7 +391,7 @@ TYPED_TEST(DistributedCoo, CanDistributeDataNonContiguously)
     }
     global_size = gko::dim<2>(5, 5);
     mat = Mtx::create_and_distribute(
-        this->mpi_exec, global_size, local_size, row_dist,
+        this->mpi_exec, global_size, row_dist,
         gko::Array<value_type>::view(this->sub_exec, 16, values),
         gko::Array<index_type>::view(this->sub_exec, 16, col_idxs),
         gko::Array<index_type>::view(this->sub_exec, 16, row_idxs));
@@ -486,7 +489,7 @@ TYPED_TEST(DistributedCoo, AppliesToDense)
     }
     global_size = gko::dim<2>(5, 5);
     mat = Mtx::create_and_distribute(
-        this->mpi_exec, global_size, local_size, row_dist,
+        this->mpi_exec, global_size, row_dist,
         gko::Array<value_type>::view(this->sub_exec, 16, values),
         gko::Array<index_type>::view(this->sub_exec, 16, col_idxs),
         gko::Array<index_type>::view(this->sub_exec, 16, row_idxs));

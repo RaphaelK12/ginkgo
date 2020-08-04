@@ -85,7 +85,7 @@ protected:
 
     explicit DummyLinOp(std::shared_ptr<const gko::Executor> exec,
                         gko::dim<2> size)
-        : gko::EnableLinOp<DummyLinOp>(exec, size)
+        : gko::EnableLinOp<DummyLinOp>(exec, size, size)
     {}
 };
 

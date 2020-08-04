@@ -44,7 +44,7 @@ class DummyLinOp : public gko::EnableLinOp<DummyLinOp>,
 public:
     DummyLinOp(std::shared_ptr<const gko::Executor> exec,
                gko::dim<2> size = gko::dim<2>{})
-        : EnableLinOp<DummyLinOp>(exec, size)
+        : EnableLinOp<DummyLinOp>(exec, size, size)
     {}
 
     void access() const { last_access = this->get_executor(); }

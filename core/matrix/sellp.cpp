@@ -135,6 +135,7 @@ void Sellp<ValueType, IndexType>::convert_to(
     result->stride_factor_ = this->stride_factor_;
     result->total_cols_ = this->total_cols_;
     result->set_size(this->get_size());
+    result->set_global_size(this->get_global_size());
 }
 
 

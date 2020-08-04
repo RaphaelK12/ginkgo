@@ -263,6 +263,14 @@ public:
     const dim<2> &get_size() const noexcept { return size_; }
 
     /**
+     * Returns the global size of the operator for a distributed object. Is
+     * equal to the size_ for a non-distributed object.
+     *
+     * @return global_size of the operator
+     */
+    const dim<2> &get_global_size() const noexcept { return global_size_; }
+
+    /**
      * Returns true if the linear operator uses the data given in x as
      * an initial guess. Returns false otherwise.
      *
@@ -279,8 +287,11 @@ protected:
      * @param size  the size of the operator
      */
     explicit LinOp(std::shared_ptr<const Executor> exec,
-                   const dim<2> &size = dim<2>{})
-        : EnableAbstractPolymorphicObject<LinOp>(exec), size_{size}
+                   const dim<2> &size = dim<2>{},
+                   const dim<2> &global_size = dim<2>{})
+        : EnableAbstractPolymorphicObject<LinOp>(exec),
+          size_{size},
+          global_size_{global_size}
     {}
 
     /**
@@ -289,6 +300,13 @@ protected:
      * @param value  the new size of the operator
      */
     void set_size(const dim<2> &value) noexcept { size_ = value; }
+
+    /**
+     * Sets the global size of the operator.
+     *
+     * @param value  the new global size of the operator
+     */
+    void set_global_size(const dim<2> &value) noexcept { global_size_ = value; }
 
     /**
      * Implementers of LinOp should override this function instead
@@ -409,6 +427,7 @@ protected:
 
 private:
     dim<2> size_{};
+    dim<2> global_size_{};
 };
 
 

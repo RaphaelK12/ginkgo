@@ -48,7 +48,7 @@ namespace {
 struct DummyOperator : public gko::EnableLinOp<DummyOperator> {
     DummyOperator(std::shared_ptr<const gko::Executor> exec,
                   gko::dim<2> size = {})
-        : gko::EnableLinOp<DummyOperator>(exec, size)
+        : gko::EnableLinOp<DummyOperator>(exec, size, size)
     {}
 
     void apply_impl(const LinOp *b, LinOp *x) const override {}

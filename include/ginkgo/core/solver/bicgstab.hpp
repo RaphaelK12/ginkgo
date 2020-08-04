@@ -173,8 +173,10 @@ protected:
 
     explicit Bicgstab(const Factory *factory,
                       std::shared_ptr<const LinOp> system_matrix)
-        : EnableLinOp<Bicgstab>(factory->get_executor(),
-                                gko::transpose(system_matrix->get_size())),
+        : EnableLinOp<Bicgstab>(
+              factory->get_executor(),
+              gko::transpose(system_matrix->get_size()),
+              gko::transpose(system_matrix->get_global_size())),
           parameters_{factory->get_parameters()},
           system_matrix_{std::move(system_matrix)}
     {

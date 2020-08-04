@@ -124,6 +124,7 @@ void Hybrid<ValueType, IndexType>::convert_to(
     // TODO set strategy correctly
     // There is no way to correctly clone the strategy like in Csr::convert_to
     result->set_size(this->get_size());
+    result->set_global_size(this->get_global_size());
 }
 
 

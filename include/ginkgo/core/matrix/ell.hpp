@@ -260,7 +260,7 @@ protected:
      */
     Ell(std::shared_ptr<const Executor> exec, const dim<2> &size,
         size_type num_stored_elements_per_row, size_type stride)
-        : EnableLinOp<Ell>(exec, size),
+        : EnableLinOp<Ell>(exec, size, size),
           values_(exec, stride * num_stored_elements_per_row),
           col_idxs_(exec, stride * num_stored_elements_per_row),
           num_stored_elements_per_row_(num_stored_elements_per_row),
@@ -292,7 +292,7 @@ protected:
     Ell(std::shared_ptr<const Executor> exec, const dim<2> &size,
         ValuesArray &&values, ColIdxsArray &&col_idxs,
         size_type num_stored_elements_per_row, size_type stride)
-        : EnableLinOp<Ell>(exec, size),
+        : EnableLinOp<Ell>(exec, size, size),
           values_{exec, std::forward<ValuesArray>(values)},
           col_idxs_{exec, std::forward<ColIdxsArray>(col_idxs)},
           num_stored_elements_per_row_{num_stored_elements_per_row},

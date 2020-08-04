@@ -166,7 +166,8 @@ protected:
      */
     explicit Isai(const Factory *factory,
                   std::shared_ptr<const LinOp> system_matrix)
-        : EnableLinOp<Isai>(factory->get_executor(), system_matrix->get_size()),
+        : EnableLinOp<Isai>(factory->get_executor(), system_matrix->get_size(),
+                            system_matrix->get_global_size()),
           parameters_{factory->get_parameters()}
     {
         const auto skip_sorting = parameters_.skip_sorting;

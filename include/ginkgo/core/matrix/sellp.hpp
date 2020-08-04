@@ -313,7 +313,7 @@ protected:
      */
     Sellp(std::shared_ptr<const Executor> exec, const dim<2> &size,
           size_type slice_size, size_type stride_factor, size_type total_cols)
-        : EnableLinOp<Sellp>(exec, size),
+        : EnableLinOp<Sellp>(exec, size, size),
           values_(exec, slice_size * total_cols),
           col_idxs_(exec, slice_size * total_cols),
           slice_lengths_(exec, ceildiv(size[0], slice_size)),

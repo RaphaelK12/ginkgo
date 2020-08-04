@@ -139,6 +139,7 @@ void Csr<ValueType, IndexType>::convert_to(
     result->col_idxs_ = this->col_idxs_;
     result->row_ptrs_ = this->row_ptrs_;
     result->set_size(this->get_size());
+    result->set_global_size(this->get_global_size());
     convert_strategy_helper(result);
 }
 

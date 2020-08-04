@@ -670,7 +670,7 @@ protected:
         size_type num_stored_elements_per_row, size_type stride,
         size_type num_nonzeros = {},
         std::shared_ptr<strategy_type> strategy = std::make_shared<automatic>())
-        : EnableLinOp<Hybrid>(exec, size),
+        : EnableLinOp<Hybrid>(exec, size, size),
           ell_(std::move(ell_type::create(
               exec, size, num_stored_elements_per_row, stride))),
           coo_(std::move(coo_type::create(exec, size, num_nonzeros))),

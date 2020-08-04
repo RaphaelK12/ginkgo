@@ -60,6 +60,7 @@ protected:
     static void assert_equal_to_original_mtx(gko::matrix::Dense<value_type> *m)
     {
         ASSERT_EQ(m->get_size(), gko::dim<2>(2, 3));
+        ASSERT_EQ(m->get_global_size(), gko::dim<2>(2, 3));
         ASSERT_EQ(m->get_stride(), 4);
         ASSERT_EQ(m->get_num_stored_elements(), 2 * 4);
         EXPECT_EQ(m->at(0, 0), value_type{1.0});
@@ -103,6 +104,7 @@ TYPED_TEST(Dense, CanBeConstructedWithSize)
         gko::matrix::Dense<TypeParam>::create(this->exec, gko::dim<2>{2, 3});
 
     ASSERT_EQ(m->get_size(), gko::dim<2>(2, 3));
+    ASSERT_EQ(m->get_global_size(), gko::dim<2>(2, 3));
     EXPECT_EQ(m->get_stride(), 3);
     ASSERT_EQ(m->get_num_stored_elements(), 6);
 }
@@ -114,8 +116,23 @@ TYPED_TEST(Dense, CanBeConstructedWithSizeAndStride)
         gko::matrix::Dense<TypeParam>::create(this->exec, gko::dim<2>{2, 3}, 4);
 
     ASSERT_EQ(m->get_size(), gko::dim<2>(2, 3));
+    ASSERT_EQ(m->get_global_size(), gko::dim<2>(2, 3));
     EXPECT_EQ(m->get_stride(), 4);
     ASSERT_EQ(m->get_num_stored_elements(), 8);
+}
+
+
+TYPED_TEST(Dense, CanBeConstructedWithSizeIndexSetAndStride)
+{
+    gko::IndexSet<gko::size_type> ind_set{6};
+    ind_set.add_index(2);
+    auto m = gko::matrix::Dense<TypeParam>::create(
+        this->exec, gko::dim<2>{2, 3}, ind_set, 4);
+
+    ASSERT_EQ(m->get_size(), gko::dim<2>(1, 3));
+    ASSERT_EQ(m->get_global_size(), gko::dim<2>(2, 3));
+    EXPECT_EQ(m->get_stride(), 4);
+    ASSERT_EQ(m->get_num_stored_elements(), 4);
 }
 
 
@@ -127,6 +144,8 @@ TYPED_TEST(Dense, KnowsItsIndexSet)
     auto index_set = m->get_index_set();
     ASSERT_EQ(index_set.get_num_subsets(), 1);
     ASSERT_EQ(index_set.get_size(), 3);
+    ASSERT_EQ(m->get_global_size(), gko::dim<2>(2, 3));
+    ASSERT_EQ(m->get_size(), gko::dim<2>(2, 3));
 }
 
 
@@ -138,6 +157,7 @@ TYPED_TEST(Dense, CanSetIndexSet)
     auto index_set = m->get_index_set();
     ASSERT_EQ(index_set.get_num_subsets(), 1);
     ASSERT_EQ(index_set.get_size(), 3);
+    ASSERT_EQ(m->get_global_size(), gko::dim<2>(2, 3));
 
     gko::IndexSet<gko::size_type> new_idx_set{10};
     new_idx_set.add_subset(1, 4);
@@ -146,7 +166,10 @@ TYPED_TEST(Dense, CanSetIndexSet)
 
     auto index_set2 = m->get_index_set();
     ASSERT_EQ(index_set2.get_num_subsets(), 2);
+    ASSERT_EQ(index_set2.get_num_elems(), 5);
     ASSERT_EQ(index_set2.get_size(), 10);
+    ASSERT_EQ(m->get_size(), gko::dim<2>(5, 3));
+    ASSERT_EQ(m->get_global_size(), gko::dim<2>(2, 3));
 }
 
 
@@ -165,6 +188,8 @@ TYPED_TEST(Dense, CanBeConstructedFromExistingData)
         gko::Array<value_type>::view(this->exec, 9, data), 3);
 
     ASSERT_EQ(m->get_const_values(), data);
+    ASSERT_EQ(m->get_size(), gko::dim<2>(3, 2));
+    ASSERT_EQ(m->get_global_size(), gko::dim<2>(3, 2));
     ASSERT_EQ(m->at(2, 1), value_type{6.0});
 }
 
@@ -182,6 +207,7 @@ TYPED_TEST(Dense, CanBeListConstructed)
         gko::initialize<gko::matrix::Dense<TypeParam>>({1.0, 2.0}, this->exec);
 
     ASSERT_EQ(m->get_size(), gko::dim<2>(2, 1));
+    ASSERT_EQ(m->get_global_size(), gko::dim<2>(2, 1));
     ASSERT_EQ(m->get_num_stored_elements(), 2);
     EXPECT_EQ(m->at(0), value_type{1});
     EXPECT_EQ(m->at(1), value_type{2});
@@ -194,6 +220,7 @@ TYPED_TEST(Dense, CanBeListConstructedWithstride)
     auto m = gko::initialize<gko::matrix::Dense<TypeParam>>(2, {1.0, 2.0},
                                                             this->exec);
     ASSERT_EQ(m->get_size(), gko::dim<2>(2, 1));
+    ASSERT_EQ(m->get_global_size(), gko::dim<2>(2, 1));
     ASSERT_EQ(m->get_num_stored_elements(), 4);
     EXPECT_EQ(m->at(0), value_type{1.0});
     EXPECT_EQ(m->at(1), value_type{2.0});
@@ -208,6 +235,7 @@ TYPED_TEST(Dense, CanBeDoubleListConstructed)
         {I<T>{1.0, 2.0}, I<T>{3.0, 4.0}, I<T>{5.0, 6.0}}, this->exec);
 
     ASSERT_EQ(m->get_size(), gko::dim<2>(3, 2));
+    ASSERT_EQ(m->get_global_size(), gko::dim<2>(3, 2));
     ASSERT_EQ(m->get_num_stored_elements(), 6);
     EXPECT_EQ(m->at(0), value_type{1.0});
     EXPECT_EQ(m->at(1), value_type{2.0});
@@ -225,6 +253,7 @@ TYPED_TEST(Dense, CanBeDoubleListConstructedWithstride)
         4, {I<T>{1.0, 2.0}, I<T>{3.0, 4.0}, I<T>{5.0, 6.0}}, this->exec);
 
     ASSERT_EQ(m->get_size(), gko::dim<2>(3, 2));
+    ASSERT_EQ(m->get_global_size(), gko::dim<2>(3, 2));
     ASSERT_EQ(m->get_num_stored_elements(), 12);
     EXPECT_EQ(m->at(0), value_type{1.0});
     EXPECT_EQ(m->at(1), value_type{2.0});
@@ -280,6 +309,7 @@ TYPED_TEST(Dense, CanBeReadFromMatrixData)
                                          {1, 2, 0.0}}});
 
     ASSERT_EQ(m->get_size(), gko::dim<2>(2, 3));
+    ASSERT_EQ(m->get_global_size(), gko::dim<2>(2, 3));
     ASSERT_EQ(m->get_num_stored_elements(), 6);
     EXPECT_EQ(m->at(0, 0), value_type{1.0});
     EXPECT_EQ(m->at(1, 0), value_type{0.0});

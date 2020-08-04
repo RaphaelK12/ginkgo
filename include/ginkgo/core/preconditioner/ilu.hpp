@@ -248,7 +248,8 @@ protected:
     {}
 
     explicit Ilu(const Factory *factory, std::shared_ptr<const LinOp> lin_op)
-        : EnableLinOp<Ilu>(factory->get_executor(), lin_op->get_size()),
+        : EnableLinOp<Ilu>(factory->get_executor(), lin_op->get_size(),
+                           lin_op->get_global_size()),
           parameters_{factory->get_parameters()}
     {
         auto comp =

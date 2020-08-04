@@ -119,6 +119,9 @@ protected:
     {
         this->set_size(gko::dim<2>{operators_.front()->get_size()[0],
                                    operators_.back()->get_size()[1]});
+        this->set_global_size(
+            gko::dim<2>{operators_.front()->get_global_size()[0],
+                        operators_.back()->get_global_size()[1]});
         for (size_type i = 1; i < operators_.size(); ++i) {
             GKO_ASSERT_CONFORMANT(operators_[i - 1], operators_[i]);
         }
@@ -140,6 +143,9 @@ protected:
         operators_.insert(begin(operators_), oper);
         this->set_size(gko::dim<2>{operators_.front()->get_size()[0],
                                    operators_.back()->get_size()[1]});
+        this->set_global_size(
+            gko::dim<2>{operators_.front()->get_global_size()[0],
+                        operators_.back()->get_global_size()[1]});
     }
 
     /**
@@ -151,7 +157,8 @@ protected:
      *       Composition(std::shared_ptr<const LinOp>, Rest &&...)
      */
     explicit Composition(std::shared_ptr<const LinOp> oper)
-        : EnableLinOp<Composition>(oper->get_executor(), oper->get_size()),
+        : EnableLinOp<Composition>(oper->get_executor(), oper->get_size(),
+                                   oper->get_global_size()),
           operators_{oper},
           storage_{oper->get_executor()}
     {}

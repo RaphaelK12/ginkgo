@@ -90,9 +90,6 @@ protected:
     static void assert_equal_mtxs(const gko::matrix::Dense<value_type> *m,
                                   const gko::matrix::Dense<value_type> *lm)
     {
-        EXPECT_EQ(m->get_size()[0], lm->get_size()[0]);
-        EXPECT_EQ(m->get_size()[1], lm->get_size()[1]);
-        ASSERT_EQ(m->get_size(), lm->get_size());
         ASSERT_EQ(m->get_stride(), lm->get_stride());
         ASSERT_EQ(m->get_num_stored_elements(), lm->get_num_stored_elements());
 
@@ -145,6 +142,7 @@ TYPED_TEST(DistributedDense, CanBeConstructedWithSize)
         this->mpi_exec, gko::dim<2>{2, 3});
 
     ASSERT_EQ(m->get_size(), gko::dim<2>(2, 3));
+    ASSERT_EQ(m->get_global_size(), gko::dim<2>(2, 3));
     EXPECT_EQ(m->get_stride(), 3);
     ASSERT_EQ(m->get_num_stored_elements(), 6);
 }
@@ -156,6 +154,7 @@ TYPED_TEST(DistributedDense, CanBeConstructedWithSizeAndStride)
         this->mpi_exec, gko::dim<2>{2, 3}, 4);
 
     ASSERT_EQ(m->get_size(), gko::dim<2>(2, 3));
+    ASSERT_EQ(m->get_global_size(), gko::dim<2>(2, 3));
     EXPECT_EQ(m->get_stride(), 4);
     ASSERT_EQ(m->get_num_stored_elements(), 8);
 }
@@ -180,6 +179,11 @@ TYPED_TEST(DistributedDense,
 
     dist_mtx = gko::initialize_and_distribute<Mtx>(
         1, row_set, {2, -1.0, 0.0, -1.0, 2, -1.0}, this->mpi_exec);
+
+    GKO_ASSERT_MPI_EXEC(dist_mtx->get_executor().get());
+    EXPECT_EQ(dist_mtx->get_global_size()[0], 6);
+    EXPECT_EQ(dist_mtx->get_global_size()[1], 1);
+    EXPECT_EQ(local_mtx->get_size(), dist_mtx->get_size());
     this->assert_equal_mtxs(local_mtx.get(), dist_mtx.get());
 }
 
@@ -205,6 +209,8 @@ TYPED_TEST(DistributedDense, CanBeInitializedWithInitializeAndStride)
     dist_mtx = gko::initialize_and_distribute<Mtx>(
         3, row_set, {{2, -1.0, 0.0}, {-1.0, 2, -1.0}, {0.0, -1.0, 2}},
         this->mpi_exec);
+    EXPECT_EQ(local_mtx->get_size(), dist_mtx->get_size());
+    EXPECT_EQ(dist_mtx->get_global_size(), gko::dim<2>(3, 3));
     this->assert_equal_mtxs(local_mtx.get(), dist_mtx.get());
 }
 
@@ -230,6 +236,10 @@ TYPED_TEST(DistributedDense, CanBeInitializedWithInitializeWithoutStride)
     dist_mtx = gko::initialize_and_distribute<Mtx>(
         row_set, {{2, -1.0, 0.0}, {-1.0, 2, -1.0}, {0.0, -1.0, 2}},
         this->mpi_exec);
+    EXPECT_EQ(local_mtx->get_size()[0], dist_mtx->get_size()[0]);
+    EXPECT_EQ(local_mtx->get_size()[1], dist_mtx->get_size()[1]);
+    EXPECT_EQ(local_mtx->get_size(), dist_mtx->get_size());
+    EXPECT_EQ(dist_mtx->get_global_size(), gko::dim<2>(3, 3));
     this->assert_equal_mtxs(local_mtx.get(), dist_mtx.get());
 }
 
@@ -255,9 +265,10 @@ TYPED_TEST(DistributedDense, CanBeConstructedFromExistingExecutorData)
     }
 
     auto m = gko::matrix::Dense<TypeParam>::distributed_create(
-        this->mpi_exec, gko::dim<2>{3, 2},
+        this->mpi_exec, gko::dim<2>{3, 3},
         gko::Array<value_type>::view(this->sub_exec, 9, data), 3);
 
+    EXPECT_EQ(m->get_global_size(), gko::dim<2>(3, 3));
     ASSERT_EQ(m->get_const_values(), data);
     if (this->rank == 0) {
         ASSERT_EQ(m->at(2, 1), value_type{6.0});
@@ -311,12 +322,15 @@ TYPED_TEST(DistributedDense, CanDistributeDataUsingRowAndStride)
             sub_exec, local_size,
             gko::Array<value_type>::view(sub_exec, 12, comp_data), 4);
     }
+    auto global_size = gko::dim<2>(5, 4);
     num_rows = row_set.get_num_elems();
     m = gko::matrix::Dense<value_type>::create_and_distribute(
-        this->mpi_exec, local_size, row_set,
+        this->mpi_exec, global_size, row_set,
         gko::Array<value_type>::view(sub_exec, 20, data), 4);
 
     ASSERT_EQ(m->get_executor(), this->mpi_exec);
+    EXPECT_EQ(lm->get_size(), m->get_size());
+    EXPECT_EQ(m->get_global_size(), gko::dim<2>(5, 4));
     this->assert_equal_mtxs(m.get(), lm.get());
     if (this->rank == 0) {
         delete data;
@@ -367,11 +381,14 @@ TYPED_TEST(DistributedDense, CanDistributeDataNonContiguously)
             sub_exec, local_size,
             gko::Array<value_type>::view(sub_exec, 12, comp_data), 4);
     }
+    auto global_size = gko::dim<2>(5, 4);
     m = gko::matrix::Dense<value_type>::create_and_distribute(
-        this->mpi_exec, local_size, row_set,
+        this->mpi_exec, global_size, row_set,
         gko::Array<value_type>::view(this->sub_exec, 20, data), 4);
 
     ASSERT_EQ(m->get_executor(), this->mpi_exec);
+    EXPECT_EQ(m->get_global_size(), gko::dim<2>(5, 4));
+    EXPECT_EQ(m->get_size(), lm->get_size());
     this->assert_equal_mtxs(m.get(), lm.get());
     if (this->rank == 0) {
         delete data;
@@ -429,6 +446,8 @@ TYPED_TEST(DistributedDense, CanCollectNonContiguousDenseMatricesOnRoot)
     m = lm->collect_on_root(this->mpi_exec, row_set);
 
     if (this->rank == 0) {
+        EXPECT_EQ(m->get_global_size(), gko::dim<2>(5, 4));
+        EXPECT_EQ(m->get_size(), gko::dim<2>(2, 4));
         ASSERT_EQ(m->get_executor(), this->mpi_exec);
         this->assert_equal_mtxs(m.get(), comp_dense.get());
         delete data;
@@ -488,6 +507,8 @@ TYPED_TEST(DistributedDense, CanCollectNonContiguousDenseMatricesOnAllRanks)
     m = lm->collect_on_all(this->mpi_exec, row_set);
 
     ASSERT_EQ(m->get_executor(), this->mpi_exec);
+    EXPECT_EQ(m->get_global_size(), gko::dim<2>(5, 4));
+    EXPECT_EQ(m->get_size(), local_size);
     this->assert_equal_mtxs(m.get(), comp_dense.get());
     delete data;
     delete comp_data;
@@ -534,12 +555,14 @@ TYPED_TEST(DistributedDense, AppliesToDense)
             this->mpi_exec->get_sub_executor(), res_size,
             gko::Array<value_type>::view(this->sub_exec, 6, comp_data), 2);
     }
+    auto global_size = gko::dim<2>(5, 2);
     auto mat = gko::matrix::Dense<value_type>::create_and_distribute(
-        this->mpi_exec, local_size, index_set,
+        this->mpi_exec, global_size, index_set,
         gko::Array<value_type>::view(this->sub_exec, 10, data), 2);
-    auto res = gko::matrix::Dense<value_type>::create(
-        this->mpi_exec->get_sub_executor(), res_size);
+    auto res = gko::matrix::Dense<value_type>::create(this->mpi_exec, res_size);
     mat->apply(this->mtx1.get(), res.get());
+    EXPECT_EQ(res->get_global_size(), comp_res->get_global_size());
+    EXPECT_EQ(res->get_size(), comp_res->get_size());
     this->assert_equal_mtxs(res.get(), comp_res.get());
     if (this->rank == 0) {
         delete data;
@@ -557,10 +580,12 @@ TYPED_TEST(DistributedDense, ScalesDense)
     gko::dim<2> local_size{};
     gko::dim<2> res_size{};
     std::shared_ptr<Mtx> comp_res;
-    auto alpha = gko::initialize<Mtx>({I<value_type>{2.0, -2.0}},
-                                      this->mpi_exec->get_sub_executor());
     value_type *data;
     value_type *comp_data;
+    value_type *alpha_data = new value_type[2]{2.0, -2.0};
+    auto alpha = Mtx::create(
+        this->mpi_exec->get_sub_executor(), gko::dim<2>(1, 2),
+        gko::Array<value_type>::view(this->sub_exec, 2, alpha_data), 2);
     if (this->rank == 0) {
         // clang-format off
         data = new value_type[10]{ 1.0, 2.0,
@@ -590,15 +615,18 @@ TYPED_TEST(DistributedDense, ScalesDense)
             this->mpi_exec->get_sub_executor(), res_size,
             gko::Array<value_type>::view(this->sub_exec, 6, comp_data), 2);
     }
+    auto global_size = gko::dim<2>(5, 2);
     auto mat = gko::matrix::Dense<value_type>::create_and_distribute(
-        this->mpi_exec, local_size, index_set,
+        this->mpi_exec, global_size, index_set,
         gko::Array<value_type>::view(this->sub_exec, 10, data), 2);
     mat->scale(alpha.get());
+    EXPECT_EQ(mat->get_size(), comp_res->get_size());
+    EXPECT_EQ(mat->get_global_size(), global_size);
     this->assert_equal_mtxs(mat.get(), comp_res.get());
     if (this->rank == 0) {
         delete data;
     }
-    delete comp_data;
+    delete comp_data, alpha_data;
 }
 
 
@@ -657,10 +685,12 @@ TYPED_TEST(DistributedDense, AddsScaled)
             this->mpi_exec->get_sub_executor(), res_size,
             gko::Array<value_type>::view(this->sub_exec, 6, b_data), 2);
     }
+    auto global_size = gko::dim<2>(5, 2);
     auto mat = gko::matrix::Dense<value_type>::create_and_distribute(
-        this->mpi_exec, local_size, index_set,
+        this->mpi_exec, global_size, index_set,
         gko::Array<value_type>::view(this->sub_exec, 10, data), 2);
     mat->add_scaled(alpha.get(), b.get());
+    EXPECT_EQ(mat->get_size(), comp_res->get_size());
     this->assert_equal_mtxs(mat.get(), comp_res.get());
     if (this->rank == 0) {
         delete data;
@@ -715,6 +745,8 @@ TYPED_TEST(DistributedDense, CanComputeDot)
         gko::Array<value_type>::view(this->sub_exec, 6, vec2_data), 2);
     vec1->compute_dot(vec2.get(), res1.get());
     vec2->compute_dot(vec1.get(), res2.get());
+    EXPECT_EQ(res1->get_size(), comp_res->get_size());
+    EXPECT_EQ(res2->get_size(), comp_res->get_size());
     this->assert_equal_mtxs(comp_res.get(), res1.get());
     this->assert_equal_mtxs(comp_res.get(), res2.get());
     delete vec1_data;
