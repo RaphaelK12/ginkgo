@@ -929,9 +929,9 @@ __global__ __launch_bounds__(default_block_size) void extract_diagonal(
 
 
 template <typename ValueType>
-__global__ __launch_bounds__(default_block_size)
-    scale(size_type num_nonzeros, const ValueType *__restrict__ alpha,
-          ValueType *__restrict__ values)
+__global__ __launch_bounds__(default_block_size) void scale(
+    size_type num_nonzeros, const ValueType *__restrict__ alpha,
+    ValueType *__restrict__ values)
 {
     const auto tidx = thread::get_thread_id_flat();
 
