@@ -222,13 +222,23 @@ public:
 
     std::unique_ptr<LinOp> conj_transpose() const override;
 
-    std::unique_ptr<Dense> collect_on_root(
-        std::shared_ptr<gko::Executor> exec,
+    std::unique_ptr<Dense> gather_on_root(
+        std::shared_ptr<const gko::Executor> exec,
         const IndexSet<size_type> &row_set) const override;
 
-    std::unique_ptr<Dense> collect_on_all(
-        std::shared_ptr<gko::Executor> exec,
+    std::unique_ptr<Dense> gather_on_all(
+        std::shared_ptr<const gko::Executor> exec,
         const IndexSet<size_type> &row_set) const override;
+
+    std::unique_ptr<Dense> reduce_on_root(
+        std::shared_ptr<const gko::Executor> exec,
+        const IndexSet<size_type> &row_set,
+        mpi::op_type op_enum) const override;
+
+    std::unique_ptr<Dense> reduce_on_all(
+        std::shared_ptr<const gko::Executor> exec,
+        const IndexSet<size_type> &row_set,
+        mpi::op_type op_enum) const override;
 
     std::unique_ptr<LinOp> row_permute(
         const Array<int32> *permutation_indices) const override;
@@ -281,7 +291,18 @@ public:
      *
      * @return the index_set
      */
-    const IndexSet<size_type> get_index_set() noexcept { return index_set_; }
+    IndexSet<size_type> get_index_set() const noexcept { return index_set_; }
+
+
+    /**
+     * Returns the index set of the Dense matrix
+     *
+     * @return the index_set
+     */
+    const IndexSet<size_type> get_const_index_set() const noexcept
+    {
+        return index_set_;
+    }
 
 
     /**
@@ -513,7 +534,7 @@ protected:
           stride_(stride),
           index_set_(size[0] + 1)
     {
-        index_set_.add_subset(0, (size[0] + 1));
+        index_set_.add_subset(0, size[0]);
     }
 
     /**
@@ -538,7 +559,7 @@ protected:
           index_set_(index_set)
     {
         if (index_set_.get_num_subsets() == 0) {
-            index_set_.add_subset(0, (size[0] + 1));
+            index_set_.add_subset(0, size[0]);
         }
         this->set_size(dim<2>(index_set_.get_num_elems(), size[1]));
     }
@@ -567,9 +588,9 @@ protected:
         : EnableLinOp<Dense>(exec, size, size),
           values_{exec, std::forward<ValuesArray>(values)},
           stride_{stride},
-          index_set_{size[0] + 1}
+          index_set_{size[0]}
     {
-        index_set_.add_subset(0, (size[0] + 1));
+        index_set_.add_subset(0, size[0]);
         GKO_ENSURE_IN_BOUNDS((size[0] - 1) * stride + size[1] - 1,
                              values_.get_num_elems());
     }
@@ -601,7 +622,7 @@ protected:
           index_set_{index_set}
     {
         if (index_set_.get_num_subsets() == 0) {
-            index_set_.add_subset(0, size[0] + 1);
+            index_set_.add_subset(0, size[0]);
         }
         this->set_size(dim<2>(index_set_.get_num_elems(), size[1]));
         auto local_size = this->get_size();
@@ -617,8 +638,8 @@ protected:
      */
     virtual std::unique_ptr<Dense> create_with_same_config() const
     {
-        return Dense::create(this->get_executor(), this->get_size(),
-                             this->get_stride());
+        return Dense::create(this->get_executor(), this->get_global_size(),
+                             this->get_index_set(), this->get_stride());
     }
 
 
@@ -705,16 +726,10 @@ protected:
     void apply_impl(const LinOp *alpha, const LinOp *b, const LinOp *beta,
                     LinOp *x) const override;
 
-    void distributed_apply_impl(const LinOp *b, LinOp *x) const override
-    {
-        this->apply_impl(b, x);
-    }
+    void distributed_apply_impl(const LinOp *b, LinOp *x) const override;
 
     void distributed_apply_impl(const LinOp *alpha, const LinOp *b,
-                                const LinOp *beta, LinOp *x) const override
-    {
-        this->apply_impl(alpha, b, beta, x);
-    }
+                                const LinOp *beta, LinOp *x) const override;
 
     size_type linearize_index(size_type row, size_type col) const noexcept
     {

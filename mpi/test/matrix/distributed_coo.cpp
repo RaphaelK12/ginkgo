@@ -163,6 +163,7 @@ protected:
 
 // TODO: Some weird error with double and complex types for COO apply
 TYPED_TEST_CASE(DistributedCoo, gko::test::DebugValueIndexType);
+// TYPED_TEST_CASE(DistributedCoo, gko::test::ValueIndexTypes);
 
 
 TYPED_TEST(DistributedCoo, DoesNotThrowForMpiExecutor)

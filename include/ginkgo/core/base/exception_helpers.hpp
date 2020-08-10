@@ -175,6 +175,15 @@ inline dim<2> get_size(const T &op)
 inline dim<2> get_size(const dim<2> &size) { return size; }
 
 
+template <typename T>
+inline dim<2> get_global_size(const T &op)
+{
+    return op->get_global_size();
+}
+
+inline dim<2> get_global_size(const dim<2> &global_size) { return global_size; }
+
+
 }  // namespace detail
 
 
@@ -204,9 +213,9 @@ inline dim<2> get_size(const dim<2> &size) { return size; }
 
 
 /**
- *Asserts that _op1 is a square matrix.
+ * Asserts that _op1 is a square matrix.
  *
- *@throw DimensionMismatch  if the number of rows of _op1 is different from the
+ * @throw DimensionMismatch  if the number of rows of _op1 is different from the
  *                          number of columns of _op1.
  */
 #define GKO_ASSERT_IS_SQUARE_MATRIX(_op1)                                \
@@ -222,9 +231,28 @@ inline dim<2> get_size(const dim<2> &size) { return size; }
 
 
 /**
- *Asserts that _op1 is a non-empty matrix.
+ * Asserts that _op1 is a square matrix for distributed object.
  *
- *@throw BadDimension if any one of the dimensions of _op1 is equal to zero.
+ * @throw DimensionMismatch  if the number of rows of _op1 is different from the
+ *                          number of columns of _op1.
+ */
+#define GKO_ASSERT_IS_SQUARE_MATRIX_DIST(_op1)              \
+    if (::gko::detail::get_global_size(_op1)[0] !=          \
+        ::gko::detail::get_global_size(_op1)[1]) {          \
+        throw ::gko::DimensionMismatch(                     \
+            __FILE__, __LINE__, __func__, #_op1,            \
+            ::gko::detail::get_global_size(_op1)[0],        \
+            ::gko::detail::get_global_size(_op1)[1], #_op1, \
+            ::gko::detail::get_global_size(_op1)[0],        \
+            ::gko::detail::get_global_size(_op1)[1],        \
+            "expected square matrix");                      \
+    }
+
+
+/**
+ * Asserts that _op1 is a non-empty matrix.
+ *
+ * @throw BadDimension if any one of the dimensions of _op1 is equal to zero.
  */
 #define GKO_ASSERT_IS_NON_EMPTY_MATRIX(_op1)                           \
     if (!(::gko::detail::get_size(_op1))) {                            \
@@ -232,6 +260,20 @@ inline dim<2> get_size(const dim<2> &size) { return size; }
                                   ::gko::detail::get_size(_op1)[0],    \
                                   ::gko::detail::get_size(_op1)[1],    \
                                   "expected non-empty matrix");        \
+    }
+
+
+/**
+ * Asserts that _op1 is a non-empty matrix for distributed objects.
+ *
+ * @throw BadDimension if any one of the dimensions of _op1 is equal to zero.
+ */
+#define GKO_ASSERT_IS_NON_EMPTY_MATRIX_DIST(_op1)                          \
+    if (!(::gko::detail::get_global_size(_op1))) {                         \
+        throw ::gko::BadDimension(__FILE__, __LINE__, __func__, #_op1,     \
+                                  ::gko::detail::get_global_size(_op1)[0], \
+                                  ::gko::detail::get_global_size(_op1)[1], \
+                                  "expected non-empty matrix");            \
     }
 
 
@@ -258,17 +300,51 @@ inline dim<2> get_size(const dim<2> &size) { return size; }
  *
  * @throw DimensionMismatch  if _op1 cannot be applied to _op2 from the right.
  */
-#define GKO_ASSERT_REVERSE_CONFORMANT(_op1, _op2)                             \
-    if (::gko::detail::get_size(_op1)[0] !=                                   \
-        ::gko::detail::get_size(_op2)[1]) {                                   \
-        throw ::gko::DimensionMismatch(__FILE__, __LINE__, __func__, #_op1,   \
-                                       ::gko::detail::get_size(_op1)[0],      \
-                                       ::gko::detail::get_size(_op1)[1],      \
-                                       #_op2,                                 \
-                                       ::gko::detail::get_size(_op2)[0],      \
-                                       ::gko::detail::get_size(_op2)[1],      \
-                                       "expected matching inner dimensions"); \
+#define GKO_ASSERT_REVERSE_CONFORMANT(_op1, _op2)                           \
+    if (::gko::detail::get_size(_op1)[0] !=                                 \
+        ::gko::detail::get_size(_op2)[1]) {                                 \
+        throw ::gko::DimensionMismatch(__FILE__, __LINE__, __func__, #_op1, \
+                                       ::gko::detail::get_size(_op1)[0],    \
+                                       ::gko::detail::get_size(_op1)[1],    \
+                                       #_op2,                               \
+                                       ::gko::detail::get_size(_op2)[0],    \
+                                       ::gko::detail::get_size(_op2)[1],    \
+                                       "expected matching inner dimensions");
+
+
+/**
+ * Asserts that _op1 can be applied to _op2 for distributed objects.
+ *
+ * @throw DimensionMismatch  if _op1 cannot be applied to _op2.
+ */
+#define GKO_ASSERT_CONFORMANT_DIST(_op1, _op2)              \
+    if (::gko::detail::get_global_size(_op1)[1] !=          \
+        ::gko::detail::get_global_size(_op2)[0]) {          \
+        throw ::gko::DimensionMismatch(                     \
+            __FILE__, __LINE__, __func__, #_op1,            \
+            ::gko::detail::get_global_size(_op1)[0],        \
+            ::gko::detail::get_global_size(_op1)[1], #_op2, \
+            ::gko::detail::get_global_size(_op2)[0],        \
+            ::gko::detail::get_global_size(_op2)[1],        \
+            "expected matching inner dimensions");          \
     }
+
+
+/**
+ * Asserts that _op1 can be applied to _op2 from the right.
+ *
+ * @throw DimensionMismatch  if _op1 cannot be applied to _op2 from the right.
+ */
+#define GKO_ASSERT_REVERSE_CONFORMANT_DIST(_op1, _op2)      \
+    if (::gko::detail::get_global_size(_op1)[0] !=          \
+        ::gko::detail::get_global_size(_op2)[1]) {          \
+        throw ::gko::DimensionMismatch(                     \
+            __FILE__, __LINE__, __func__, #_op1,            \
+            ::gko::detail::get_global_size(_op1)[0],        \
+            ::gko::detail::get_global_size(_op1)[1], #_op2, \
+            ::gko::detail::get_global_size(_op2)[0],        \
+            ::gko::detail::get_global_size(_op2)[1],        \
+            "expected matching inner dimensions");
 
 
 /**
@@ -285,6 +361,25 @@ inline dim<2> get_size(const dim<2> &size) { return size; }
             ::gko::detail::get_size(_op1)[1], #_op2,                           \
             ::gko::detail::get_size(_op2)[0],                                  \
             ::gko::detail::get_size(_op2)[1], "expected matching row length"); \
+    }
+
+
+/**
+ * Asserts that `_op1` and `_op2` have the same number of rows for distributed
+ * objects.
+ *
+ * @throw DimensionMismatch  if `_op1` and `_op2` differ in the number of rows
+ */
+#define GKO_ASSERT_EQUAL_ROWS_DIST(_op1, _op2)              \
+    if (::gko::detail::get_global_size(_op1)[0] !=          \
+        ::gko::detail::get_global_size(_op2)[0]) {          \
+        throw ::gko::DimensionMismatch(                     \
+            __FILE__, __LINE__, __func__, #_op1,            \
+            ::gko::detail::get_global_size(_op1)[0],        \
+            ::gko::detail::get_global_size(_op1)[1], #_op2, \
+            ::gko::detail::get_global_size(_op2)[0],        \
+            ::gko::detail::get_global_size(_op2)[1],        \
+            "expected matching row length");                \
     }
 
 
@@ -308,6 +403,26 @@ inline dim<2> get_size(const dim<2> &size) { return size; }
 
 
 /**
+ * Asserts that `_op1` and `_op2` have the same number of columns for
+ * distributed objects.
+ *
+ * @throw DimensionMismatch  if `_op1` and `_op2` differ in the number of
+ *                           columns
+ */
+#define GKO_ASSERT_EQUAL_COLS_DIST(_op1, _op2)              \
+    if (::gko::detail::get_global_size(_op1)[1] !=          \
+        ::gko::detail::get_global_size(_op2)[1]) {          \
+        throw ::gko::DimensionMismatch(                     \
+            __FILE__, __LINE__, __func__, #_op1,            \
+            ::gko::detail::get_global_size(_op1)[0],        \
+            ::gko::detail::get_global_size(_op1)[1], #_op2, \
+            ::gko::detail::get_global_size(_op2)[0],        \
+            ::gko::detail::get_global_size(_op2)[1],        \
+            "expected matching column length");             \
+    }
+
+
+/**
  * Asserts that `_op1` and `_op2` have the same number of rows and columns.
  *
  * @throw DimensionMismatch  if `_op1` and `_op2` differ in the number of
@@ -321,6 +436,26 @@ inline dim<2> get_size(const dim<2> &size) { return size; }
             ::gko::detail::get_size(_op1)[1], #_op2,                        \
             ::gko::detail::get_size(_op2)[0],                               \
             ::gko::detail::get_size(_op2)[1], "expected equal dimensions"); \
+    }
+
+
+/**
+ * Asserts that `_op1` and `_op2` have the same number of rows and columns for
+ * distributed objects.
+ *
+ * @throw DimensionMismatch  if `_op1` and `_op2` differ in the number of
+ *                           rows or columns
+ */
+#define GKO_ASSERT_EQUAL_DIMENSIONS_DIST(_op1, _op2)        \
+    if (::gko::detail::get_global_size(_op1) !=             \
+        ::gko::detail::get_global_size(_op2)) {             \
+        throw ::gko::DimensionMismatch(                     \
+            __FILE__, __LINE__, __func__, #_op1,            \
+            ::gko::detail::get_global_size(_op1)[0],        \
+            ::gko::detail::get_global_size(_op1)[1], #_op2, \
+            ::gko::detail::get_global_size(_op2)[0],        \
+            ::gko::detail::get_global_size(_op2)[1],        \
+            "expected equal dimensions");                   \
     }
 
 

@@ -38,8 +38,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <functional>
 #include <iterator>
 #include <memory>
-#include <type_traits>
 #include <numeric>
+#include <type_traits>
 #include <utility>
 
 
@@ -510,15 +510,31 @@ public:
      * Gathers the array only on root according to the given index set.
      */
     template <typename IndexType>
-    Array collect_on_root(std::shared_ptr<gko::Executor> exec,
-                          const IndexSet<IndexType> &index_set) const;
+    Array gather_on_root(std::shared_ptr<const gko::Executor> exec,
+                         const IndexSet<IndexType> &index_set) const;
 
     /**
      * Gathers the array on all ranks according to the given index set.
      */
     template <typename IndexType>
-    Array collect_on_all(std::shared_ptr<gko::Executor> exec,
-                         const IndexSet<IndexType> &index_set) const;
+    Array gather_on_all(std::shared_ptr<const gko::Executor> exec,
+                        const IndexSet<IndexType> &index_set) const;
+
+    /**
+     * Gathers the array only on root according to the given index set.
+     */
+    template <typename IndexType>
+    Array reduce_on_root(std::shared_ptr<const gko::Executor> exec,
+                         const IndexSet<IndexType> &index_set,
+                         mpi::op_type op_enum) const;
+
+    /**
+     * Gathers the array on all ranks according to the given index set.
+     */
+    template <typename IndexType>
+    Array reduce_on_all(std::shared_ptr<const gko::Executor> exec,
+                        const IndexSet<IndexType> &index_set,
+                        mpi::op_type op_enum) const;
 
     /**
      * Computes the sqrt of each element in the array.

@@ -126,6 +126,21 @@ struct dim {
     }
 
     /**
+     * Checks if all dimensions evaluate to true.
+     *
+     * For standard arithmetic types, this is equivalent to all dimensions being
+     * different than zero.
+     *
+     * @return true if and only if all dimensions evaluate to true
+     */
+    friend GKO_ATTRIBUTES std::ostream &operator<<(std::ostream &os,
+                                                   const dim &out_dim)
+    {
+        os << " ( " << out_dim.first_ << " , " << out_dim.rest_ << " ) ";
+        return os;
+    }
+
+    /**
      * Checks if two dim objects are equal.
      *
      * @param x  first object
@@ -150,23 +165,6 @@ struct dim {
     {
         return dim(x.first_ * y.first_, x.rest_ * y.rest_);
     }
-
-    dim distribute(int num_ranks, int my_rank)
-    {
-        dim new_local_size{};
-        auto nrow = first_;
-        auto ncol = rest_[0];
-        bool eq_div = !(bool(nrow % num_ranks));
-        auto eq_size = int(nrow / num_ranks);
-        std::vector<int> size_vec(num_ranks, eq_size);
-        if (!eq_div) {
-            size_vec.back() = nrow - (num_ranks - 1) * eq_size;
-        }
-        new_local_size[0] = size_vec[my_rank];
-        new_local_size[1] = ncol;
-        return new_local_size;
-    }
-
 
 private:
     constexpr GKO_ATTRIBUTES dim(const dimension_type first,

@@ -55,6 +55,9 @@ using ValueTypes =
     ::testing::Types<float, double, std::complex<float>, std::complex<double>>;
 
 
+using NonComplexValueTypes = ::testing::Types<float, double>;
+
+
 using ComplexValueTypes =
     ::testing::Types<std::complex<float>, std::complex<double>>;
 

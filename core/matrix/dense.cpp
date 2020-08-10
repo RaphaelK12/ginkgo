@@ -231,6 +231,50 @@ void Dense<ValueType>::apply_impl(const LinOp *alpha, const LinOp *b,
 
 
 template <typename ValueType>
+void Dense<ValueType>::distributed_apply_impl(const LinOp *b, LinOp *x) const
+{
+    auto mat_exec = this->get_executor()->get_sub_executor();
+    auto b_exec = b->get_executor();
+    auto dense_x = as<Dense<ValueType>>(x);
+    auto dense_b = as<Dense<ValueType>>(b);
+
+    auto row_set_b = dense_b->get_index_set();
+    auto flag = dense_b->get_size() == dense_b->get_global_size();
+    if (!flag) {
+        auto gathered_rhs = dense_b->gather_on_all(b_exec, row_set_b);
+        mat_exec->run(
+            dense::make_simple_apply(this, gathered_rhs.get(), dense_x));
+    } else {
+        mat_exec->run(dense::make_simple_apply(this, dense_b, dense_x));
+    }
+}
+
+
+template <typename ValueType>
+void Dense<ValueType>::distributed_apply_impl(const LinOp *alpha,
+                                              const LinOp *b, const LinOp *beta,
+                                              LinOp *x) const
+{
+    auto exec = this->get_executor()->get_sub_executor();
+    auto b_exec = b->get_executor();
+    auto dense_x = as<Dense<ValueType>>(x);
+    auto dense_b = as<Dense<ValueType>>(b);
+    auto dense_alpha = as<Dense<ValueType>>(alpha);
+    auto dense_beta = as<Dense<ValueType>>(beta);
+    auto row_set_b = dense_b->get_index_set();
+    auto flag = dense_b->get_size() == dense_b->get_global_size();
+    if (!flag) {
+        auto gathered_rhs = dense_b->gather_on_all(b_exec, row_set_b);
+        exec->run(dense::make_apply(dense_alpha, this, gathered_rhs.get(),
+                                    dense_beta, dense_x));
+    } else {
+        exec->run(
+            dense::make_apply(dense_alpha, this, dense_b, dense_beta, dense_x));
+    }
+}
+
+
+template <typename ValueType>
 void Dense<ValueType>::scale_impl(const LinOp *alpha)
 {
     GKO_ASSERT_EQUAL_ROWS(alpha, dim<2>(1, 1));
@@ -658,8 +702,8 @@ std::unique_ptr<LinOp> Dense<ValueType>::conj_transpose() const
 
 
 template <typename ValueType>
-std::unique_ptr<Dense<ValueType>> Dense<ValueType>::collect_on_root(
-    std::shared_ptr<gko::Executor> exec,
+std::unique_ptr<Dense<ValueType>> Dense<ValueType>::gather_on_root(
+    std::shared_ptr<const gko::Executor> exec,
     const IndexSet<size_type> &row_set) const
 {
     GKO_ASSERT_MPI_EXEC(exec.get());
@@ -685,7 +729,7 @@ std::unique_ptr<Dense<ValueType>> Dense<ValueType>::collect_on_root(
         elem++;
     }
     auto gathered_array =
-        this->get_const_values_array().collect_on_root(exec, index_set);
+        this->get_const_values_array().gather_on_root(exec, index_set);
     auto gathered_dense = Dense::create(exec);
     if (my_rank == root_rank) {
         gathered_dense =
@@ -697,8 +741,8 @@ std::unique_ptr<Dense<ValueType>> Dense<ValueType>::collect_on_root(
 
 
 template <typename ValueType>
-std::unique_ptr<Dense<ValueType>> Dense<ValueType>::collect_on_all(
-    std::shared_ptr<gko::Executor> exec,
+std::unique_ptr<Dense<ValueType>> Dense<ValueType>::gather_on_all(
+    std::shared_ptr<const gko::Executor> exec,
     const IndexSet<size_type> &row_set) const
 {
     GKO_ASSERT_MPI_EXEC(exec.get());
@@ -724,7 +768,82 @@ std::unique_ptr<Dense<ValueType>> Dense<ValueType>::collect_on_all(
         elem++;
     }
     auto gathered_array =
-        this->get_const_values_array().collect_on_all(exec, index_set);
+        this->get_const_values_array().gather_on_all(exec, index_set);
+    auto gathered_dense =
+        Dense::create(exec, gko::dim<2>(global_num_rows, mat_size[1]), row_set,
+                      gathered_array, mat_stride);
+    return std::move(gathered_dense);
+}
+
+
+template <typename ValueType>
+std::unique_ptr<Dense<ValueType>> Dense<ValueType>::reduce_on_root(
+    std::shared_ptr<const gko::Executor> exec,
+    const IndexSet<size_type> &row_set, mpi::op_type op_enum) const
+{
+    GKO_ASSERT_MPI_EXEC(exec.get());
+    auto mpi_exec = gko::as<MpiExecutor>(exec.get());
+    auto sub_exec = exec->get_sub_executor();
+    auto num_ranks = mpi_exec->get_num_ranks();
+    auto my_rank = mpi_exec->get_my_rank();
+    auto root_rank = mpi_exec->get_root_rank();
+
+    auto mat_size = this->get_size();
+    auto mat_stride = this->get_stride();
+    auto local_num_rows = row_set.get_num_elems();
+    GKO_ASSERT_CONDITION(mat_size[0] == local_num_rows);
+    auto global_num_rows = local_num_rows;
+    mpi_exec->all_reduce(&local_num_rows, &global_num_rows, 1,
+                         gko::mpi::op_type::sum);
+    auto max_index_size = row_set.get_largest_element_in_set();
+    auto index_set =
+        gko::IndexSet<gko::int32>{(max_index_size + 1) * mat_stride};
+    auto elem = row_set.begin();
+    for (auto i = 0; i < local_num_rows; ++i) {
+        index_set.add_dense_row(*elem, mat_stride);
+        elem++;
+    }
+    auto gathered_array =
+        this->get_const_values_array().gather_on_root(exec, index_set);
+    auto gathered_dense = Dense::create(exec);
+    if (my_rank == root_rank) {
+        gathered_dense =
+            Dense::create(exec, gko::dim<2>(global_num_rows, mat_size[1]),
+                          row_set, gathered_array, mat_stride);
+    }
+    return std::move(gathered_dense);
+}
+
+
+template <typename ValueType>
+std::unique_ptr<Dense<ValueType>> Dense<ValueType>::reduce_on_all(
+    std::shared_ptr<const gko::Executor> exec,
+    const IndexSet<size_type> &row_set, mpi::op_type op_enum) const
+{
+    GKO_ASSERT_MPI_EXEC(exec.get());
+    auto mpi_exec = gko::as<MpiExecutor>(exec.get());
+    auto sub_exec = exec->get_sub_executor();
+    auto num_ranks = mpi_exec->get_num_ranks();
+    auto my_rank = mpi_exec->get_my_rank();
+    auto root_rank = mpi_exec->get_root_rank();
+
+    auto mat_size = this->get_size();
+    auto mat_stride = this->get_stride();
+    auto local_num_rows = row_set.get_num_elems();
+    GKO_ASSERT_CONDITION(mat_size[0] == local_num_rows);
+    auto global_num_rows = local_num_rows;
+    mpi_exec->all_reduce(&local_num_rows, &global_num_rows, 1,
+                         gko::mpi::op_type::sum);
+    auto max_index_size = row_set.get_largest_element_in_set();
+    auto index_set =
+        gko::IndexSet<gko::int32>{(max_index_size + 1) * mat_stride};
+    auto elem = row_set.begin();
+    for (auto i = 0; i < local_num_rows; ++i) {
+        index_set.add_dense_row(*elem, mat_stride);
+        elem++;
+    }
+    auto gathered_array =
+        this->get_const_values_array().gather_on_all(exec, index_set);
     auto gathered_dense =
         Dense::create(exec, gko::dim<2>(global_num_rows, mat_size[1]), row_set,
                       gathered_array, mat_stride);

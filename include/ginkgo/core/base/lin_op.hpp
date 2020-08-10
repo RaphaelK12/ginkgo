@@ -157,6 +157,7 @@ public:
     {
         this->template log<log::Logger::linop_apply_started>(this, b, x);
         auto exec = this->get_executor();
+        auto sub_exec = exec->get_sub_executor();
         if (auto chk = dynamic_cast<const gko::MpiExecutor *>(exec.get())) {
             this->validate_distributed_application_parameters(b, x);
             this->distributed_apply_impl(make_temporary_clone(exec, b).get(),
@@ -177,6 +178,7 @@ public:
     {
         this->template log<log::Logger::linop_apply_started>(this, b, x);
         auto exec = this->get_executor();
+        auto sub_exec = exec->get_sub_executor();
         if (auto chk = dynamic_cast<const gko::MpiExecutor *>(exec.get())) {
             this->validate_distributed_application_parameters(b, x);
             this->distributed_apply_impl(make_temporary_clone(exec, b).get(),
@@ -206,6 +208,7 @@ public:
         this->template log<log::Logger::linop_advanced_apply_started>(
             this, alpha, b, beta, x);
         auto exec = this->get_executor();
+        auto sub_exec = exec->get_sub_executor();
         if (auto chk = dynamic_cast<const gko::MpiExecutor *>(exec.get())) {
             this->validate_distributed_application_parameters(alpha, b, beta,
                                                               x);
@@ -235,6 +238,7 @@ public:
         this->template log<log::Logger::linop_advanced_apply_started>(
             this, alpha, b, beta, x);
         auto exec = this->get_executor();
+        auto sub_exec = exec->get_sub_executor();
         if (auto chk = dynamic_cast<const gko::MpiExecutor *>(exec.get())) {
             this->validate_distributed_application_parameters(alpha, b, beta,
                                                               x);
@@ -384,8 +388,16 @@ protected:
     void validate_distributed_application_parameters(const LinOp *b,
                                                      const LinOp *x) const
     {
-        GKO_ASSERT_CONFORMANT(this, b);
-        GKO_ASSERT_EQUAL_COLS(b, x);
+        auto b_exec = b->get_executor();
+        if (dynamic_cast<const gko::MpiExecutor *>(b_exec.get())) {
+            GKO_ASSERT_CONFORMANT_DIST(this, b);
+            GKO_ASSERT_EQUAL_ROWS(this, x);
+            GKO_ASSERT_EQUAL_COLS_DIST(b, x);
+        } else {
+            GKO_ASSERT_CONFORMANT(this, b);
+            GKO_ASSERT_EQUAL_ROWS(this, x);
+            GKO_ASSERT_EQUAL_COLS_DIST(b, x);
+        }
     }
 
     /**
@@ -550,9 +562,10 @@ public:
 
 /**
  * Linear operators which support gather in a distributed settings need to
- * implement Gatherable interface.
+ * implement Collectable interface.
  *
- * It provides two functionalities, a gather to all ranks and a gather to root
+ * It provides the collective functionalities, a gather to all ranks,  a gather
+ * to root, reduce to all and reduce to root.
  *
  * Example: Gathering a Dense matrix:
  * ------------------------------------
@@ -575,8 +588,8 @@ public:
      *
      * @return a pointer to the new collected object
      */
-    virtual std::unique_ptr<ObjType> collect_on_root(
-        std::shared_ptr<gko::Executor> exec,
+    virtual std::unique_ptr<ObjType> gather_on_root(
+        std::shared_ptr<const gko::Executor> exec,
         const IndexSet<size_type> &row_set) const = 0;
 
     /**
@@ -584,9 +597,27 @@ public:
      *
      * @return a pointer to the new collected object
      */
-    virtual std::unique_ptr<ObjType> collect_on_all(
-        std::shared_ptr<gko::Executor> exec,
+    virtual std::unique_ptr<ObjType> gather_on_all(
+        std::shared_ptr<const gko::Executor> exec,
         const IndexSet<size_type> &row_set) const = 0;
+
+    /**
+     * Returns a collected ObjType of the object on the root.
+     *
+     * @return a pointer to the new collected object
+     */
+    virtual std::unique_ptr<ObjType> reduce_on_root(
+        std::shared_ptr<const gko::Executor> exec,
+        const IndexSet<size_type> &row_set, mpi::op_type op_enum) const = 0;
+
+    /**
+     * Returns a collected ObjType of the object on all ranks.
+     *
+     * @return a pointer to the new collected object
+     */
+    virtual std::unique_ptr<ObjType> reduce_on_all(
+        std::shared_ptr<const gko::Executor> exec,
+        const IndexSet<size_type> &row_set, mpi::op_type op_enum) const = 0;
 };
 
 
