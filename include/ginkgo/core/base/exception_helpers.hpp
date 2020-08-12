@@ -300,16 +300,17 @@ inline dim<2> get_global_size(const dim<2> &global_size) { return global_size; }
  *
  * @throw DimensionMismatch  if _op1 cannot be applied to _op2 from the right.
  */
-#define GKO_ASSERT_REVERSE_CONFORMANT(_op1, _op2)                           \
-    if (::gko::detail::get_size(_op1)[0] !=                                 \
-        ::gko::detail::get_size(_op2)[1]) {                                 \
-        throw ::gko::DimensionMismatch(__FILE__, __LINE__, __func__, #_op1, \
-                                       ::gko::detail::get_size(_op1)[0],    \
-                                       ::gko::detail::get_size(_op1)[1],    \
-                                       #_op2,                               \
-                                       ::gko::detail::get_size(_op2)[0],    \
-                                       ::gko::detail::get_size(_op2)[1],    \
-                                       "expected matching inner dimensions");
+#define GKO_ASSERT_REVERSE_CONFORMANT(_op1, _op2)                             \
+    if (::gko::detail::get_size(_op1)[0] !=                                   \
+        ::gko::detail::get_size(_op2)[1]) {                                   \
+        throw ::gko::DimensionMismatch(__FILE__, __LINE__, __func__, #_op1,   \
+                                       ::gko::detail::get_size(_op1)[0],      \
+                                       ::gko::detail::get_size(_op1)[1],      \
+                                       #_op2,                                 \
+                                       ::gko::detail::get_size(_op2)[0],      \
+                                       ::gko::detail::get_size(_op2)[1],      \
+                                       "expected matching inner dimensions"); \
+    }
 
 
 /**
@@ -344,7 +345,8 @@ inline dim<2> get_global_size(const dim<2> &global_size) { return global_size; }
             ::gko::detail::get_global_size(_op1)[1], #_op2, \
             ::gko::detail::get_global_size(_op2)[0],        \
             ::gko::detail::get_global_size(_op2)[1],        \
-            "expected matching inner dimensions");
+            "expected matching inner dimensions");          \
+    }
 
 
 /**

@@ -238,9 +238,9 @@ void Dense<ValueType>::distributed_apply_impl(const LinOp *b, LinOp *x) const
     auto dense_x = as<Dense<ValueType>>(x);
     auto dense_b = as<Dense<ValueType>>(b);
 
-    auto row_set_b = dense_b->get_index_set();
     auto flag = dense_b->get_size() == dense_b->get_global_size();
     if (!flag) {
+        auto row_set_b = dense_b->get_index_set();
         auto gathered_rhs = dense_b->gather_on_all(b_exec, row_set_b);
         mat_exec->run(
             dense::make_simple_apply(this, gathered_rhs.get(), dense_x));

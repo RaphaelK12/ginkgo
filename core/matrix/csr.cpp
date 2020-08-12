@@ -132,6 +132,85 @@ void Csr<ValueType, IndexType>::apply_impl(const LinOp *alpha, const LinOp *b,
 
 
 template <typename ValueType, typename IndexType>
+void Csr<ValueType, IndexType>::distributed_apply_impl(const LinOp *b,
+                                                       LinOp *x) const
+{
+    using Dense = Dense<ValueType>;
+    using TCsr = Csr<ValueType, IndexType>;
+    auto mat_exec = this->get_executor()->get_sub_executor();
+    auto b_exec = b->get_executor();
+
+    if (auto b_csr = dynamic_cast<const TCsr *>(b)) {
+        // if b is a CSR matrix, we compute a SpGeMM
+        auto x_csr = as<TCsr>(x);
+        auto flag = b_csr->get_size() == b_csr->get_global_size();
+        if (!flag) {
+            GKO_NOT_IMPLEMENTED;
+        } else {
+            mat_exec->run(csr::make_spgemm(this, b_csr, x_csr));
+        }
+    } else {
+        auto dense_x = as<Dense>(x);
+        auto dense_b = as<Dense>(b);
+        // otherwise we assume that b is dense and compute a SpMV/SpMM
+        auto flag = dense_b->get_size() == dense_b->get_global_size();
+        if (!flag) {
+            auto row_set_b = dense_b->get_index_set();
+            auto gathered_rhs = dense_b->gather_on_all(b_exec, row_set_b);
+            mat_exec->run(csr::make_spmv(this, gathered_rhs.get(), dense_x));
+        } else {
+            mat_exec->run(csr::make_spmv(this, dense_b, dense_x));
+        }
+    }
+}
+
+
+template <typename ValueType, typename IndexType>
+void Csr<ValueType, IndexType>::distributed_apply_impl(const LinOp *alpha,
+                                                       const LinOp *b,
+                                                       const LinOp *beta,
+                                                       LinOp *x) const
+{
+    using Dense = Dense<ValueType>;
+    using TCsr = Csr<ValueType, IndexType>;
+    auto mat_exec = this->get_executor()->get_sub_executor();
+    auto b_exec = b->get_executor();
+
+    if (auto b_csr = dynamic_cast<const TCsr *>(b)) {
+        // if b is a CSR matrix, we compute a SpGeMM
+        auto x_csr = as<TCsr>(x);
+        auto x_copy = x_csr->clone();
+        auto flag = b_csr->get_size() == b_csr->get_global_size();
+        if (!flag) {
+            GKO_NOT_IMPLEMENTED;
+        } else {
+            mat_exec->run(csr::make_advanced_spgemm(as<Dense>(alpha), this,
+                                                    b_csr, as<Dense>(beta),
+                                                    x_copy.get(), x_csr));
+        }
+    } else if (dynamic_cast<const Identity<ValueType> *>(b)) {
+        // if b is an identity matrix, we compute an SpGEAM
+        GKO_NOT_IMPLEMENTED;
+    } else {
+        auto dense_b = as<Dense>(b);
+        auto flag = dense_b->get_size() == dense_b->get_global_size();
+        if (!flag) {
+            auto row_set_b = dense_b->get_index_set();
+            auto gathered_rhs = dense_b->gather_on_all(b_exec, row_set_b);
+            mat_exec->run(csr::make_advanced_spmv(
+                as<Dense>(alpha), this, gathered_rhs.get(), as<Dense>(beta),
+                as<Dense>(x)));
+        } else {
+            mat_exec->run(csr::make_advanced_spmv(as<Dense>(alpha), this,
+                                                  dense_b, as<Dense>(beta),
+                                                  as<Dense>(x)));
+        }
+        // otherwise we assume that b is dense and compute a SpMV/SpMM
+    }
+}
+
+
+template <typename ValueType, typename IndexType>
 void Csr<ValueType, IndexType>::convert_to(
     Csr<next_precision<ValueType>, IndexType> *result) const
 {

@@ -416,7 +416,7 @@ TYPED_TEST(DistributedCsr, CanDistributeDataNonContiguously)
 }
 
 
-TYPED_TEST(DistributedCsr, AppliesToDense)
+TYPED_TEST(DistributedCsr, AppliesToLocalDense)
 {
     using value_type = typename TestFixture::value_type;
     using index_type = typename TestFixture::index_type;
@@ -437,11 +437,6 @@ TYPED_TEST(DistributedCsr, AppliesToDense)
     index_type *local_row_ptrs;
     gko::IndexSet<size_type> row_dist{6};
     size_type num_rows;
-    value_type *vec_data;
-    vec_data = new value_type[5]{-3.0, 3.0, -5.0, 5.0, 1.0};
-    dvec = DenseVec::create(
-        this->sub_exec, gko::dim<2>(5, 1),
-        gko::Array<value_type>::view(this->sub_exec, 5, vec_data), 1);
     auto global_size = gko::dim<2>(5, 5);
     if (this->rank == 0) {
         // clang-format off
@@ -502,6 +497,11 @@ TYPED_TEST(DistributedCsr, AppliesToDense)
             gko::Array<index_type>::view(this->sub_exec, 4, local_row_ptrs),
             std::make_shared<typename Mtx::load_balance>(2));
     }
+    auto rhs = gko::initialize<DenseVec>(
+        1, I<value_type>({-3.0, 3.0, -5.0, 5.0, 1.0}), this->sub_exec);
+    auto exact = gko::initialize_and_distribute<DenseVec>(
+        1, row_dist, I<value_type>({-9.0, 7.5, -8.0, 3.5, 28.0}),
+        this->mpi_exec);
     mat = Mtx::create_and_distribute(
         this->mpi_exec, global_size, row_dist,
         gko::Array<value_type>::view(this->sub_exec, 16, values),
@@ -510,15 +510,349 @@ TYPED_TEST(DistributedCsr, AppliesToDense)
         std::make_shared<typename Mtx::load_balance>(2));
     std::shared_ptr<DenseVec> res =
         DenseVec::create(this->sub_exec, gko::dim<2>(num_rows, 1));
-    l_mat->apply(dvec.get(), expected.get());
-    mat->apply(dvec.get(), res.get());
+    l_mat->apply(rhs.get(), expected.get());
+    mat->apply(rhs.get(), res.get());
     ASSERT_EQ(mat->get_executor(), this->mpi_exec);
     this->assert_equal_mtxs(mat.get(), l_mat.get());
-    this->assert_equal_vecs(res.get(), expected.get());
+    this->assert_equal_vecs(res.get(), exact.get());
     if (this->rank == 0) {
         delete values, row_ptrs, col_idxs;
     }
-    delete vec_data, local_values, local_row_ptrs, local_col_idxs;
+    delete local_values, local_row_ptrs, local_col_idxs;
+}
+
+
+TYPED_TEST(DistributedCsr, AppliesToDistributedDense)
+{
+    using value_type = typename TestFixture::value_type;
+    using index_type = typename TestFixture::index_type;
+    using Mtx = typename TestFixture::Mtx;
+    using DenseVec = gko::matrix::Dense<value_type>;
+    using size_type = gko::size_type;
+    std::shared_ptr<Mtx> mat{};
+    std::shared_ptr<Mtx> l_mat{};
+    std::shared_ptr<DenseVec> dvec{};
+    std::shared_ptr<DenseVec> expected{};
+    this->mpi_exec->set_root_rank(0);
+    gko::dim<2> local_size{};
+    value_type *values;
+    index_type *col_idxs;
+    index_type *row_ptrs;
+    value_type *local_values;
+    index_type *local_col_idxs;
+    index_type *local_row_ptrs;
+    gko::IndexSet<size_type> row_dist{6};
+    size_type num_rows;
+    auto global_size = gko::dim<2>(5, 5);
+    if (this->rank == 0) {
+        // clang-format off
+        /*  1.0  0.0  1.0  0.0 -1.0 ] rank 0
+         *  0.0  2.0  0.0  0.0  1.5 ] rank 1
+         * -2.0  0.0  4.0  0.0  6.0 } rank 0
+         *  0.5 -2.0  3.0  5.0  1.0 } rank 1
+         * -3.0  4.0  0.0  0.0  7.0 } rank 1
+         */
+        // clang-format on
+        values = new value_type[16]{1.0, 1.0,  -1.0, 2.0, 1.5, -2.0, 4.0, 6.0,
+                                    0.5, -2.0, 3.0,  5.0, 1.0, -3.0, 4.0, 7.0};
+        col_idxs =
+            new index_type[16]{0, 2, 4, 1, 4, 0, 2, 4, 0, 1, 2, 3, 4, 0, 1, 4};
+        row_ptrs = new index_type[6]{0, 3, 5, 8, 13, 16};
+        local_values = new value_type[6]{1.0, 1.0, -1.0, -2.0, 4.0, 6.0};
+        local_col_idxs = new index_type[6]{0, 2, 4, 0, 2, 4};
+        local_row_ptrs = new index_type[3]{0, 3, 6};
+        row_dist.add_index(0);
+        row_dist.add_index(2);
+        num_rows = 2;
+        local_size = gko::dim<2>(num_rows, 5);
+        expected = DenseVec::create(this->sub_exec, gko::dim<2>(num_rows, 1));
+        // clang-format off
+        /*
+         *  1.0  0.0  1.0  0.0 -1.0 ]
+         * -2.0  0.0  4.0  0.0  6.0 } rank 0
+         */
+        // clang-format on
+        l_mat = Mtx::create(
+            this->sub_exec, gko::dim<2>{2, 5},
+            gko::Array<value_type>::view(this->sub_exec, 6, local_values),
+            gko::Array<index_type>::view(this->sub_exec, 6, local_col_idxs),
+            gko::Array<index_type>::view(this->sub_exec, 3, local_row_ptrs),
+            std::make_shared<typename Mtx::load_balance>(2));
+    } else {
+        local_values = new value_type[10]{2.0, 1.5, 0.5,  -2.0, 3.0,
+                                          5.0, 1.0, -3.0, 4.0,  7.0};
+        local_col_idxs = new index_type[10]{1, 4, 0, 1, 2, 3, 4, 0, 1, 4};
+        local_row_ptrs = new index_type[4]{0, 2, 7, 10};
+        row_dist.add_index(1);
+        row_dist.add_index(3);
+        row_dist.add_index(4);
+        num_rows = 3;
+        local_size = gko::dim<2>(num_rows, 5);
+        expected = DenseVec::create(this->sub_exec, gko::dim<2>(num_rows, 1));
+        // clang-format off
+        /*
+         *  0.0  2.0  0.0  0.0  1.5 ] rank 1
+         *  0.5 -2.0  3.0  5.0  1.0 } rank 1
+         * -3.0  4.0  0.0  0.0  7.0 } rank 1
+         */
+        // clang-format on
+        l_mat = Mtx::create(
+            this->sub_exec, local_size,
+            gko::Array<value_type>::view(this->sub_exec, 10, local_values),
+            gko::Array<index_type>::view(this->sub_exec, 10, local_col_idxs),
+            gko::Array<index_type>::view(this->sub_exec, 4, local_row_ptrs),
+            std::make_shared<typename Mtx::load_balance>(2));
+    }
+    auto rhs = gko::initialize<DenseVec>(
+        1, I<value_type>({-3.0, 3.0, -5.0, 5.0, 1.0}), this->sub_exec);
+    auto dist_rhs = gko::initialize_and_distribute<DenseVec>(
+        1, row_dist, I<value_type>({-3.0, 3.0, -5.0, 5.0, 1.0}),
+        this->mpi_exec);
+    auto exact = gko::initialize_and_distribute<DenseVec>(
+        1, row_dist, I<value_type>({-9.0, 7.5, -8.0, 3.5, 28.0}),
+        this->mpi_exec);
+    mat = Mtx::create_and_distribute(
+        this->mpi_exec, global_size, row_dist,
+        gko::Array<value_type>::view(this->sub_exec, 16, values),
+        gko::Array<index_type>::view(this->sub_exec, 16, col_idxs),
+        gko::Array<index_type>::view(this->sub_exec, 6, row_ptrs),
+        std::make_shared<typename Mtx::load_balance>(2));
+    std::shared_ptr<DenseVec> res =
+        DenseVec::create(this->sub_exec, gko::dim<2>(num_rows, 1));
+    l_mat->apply(rhs.get(), expected.get());
+    mat->apply(dist_rhs.get(), res.get());
+    ASSERT_EQ(mat->get_executor(), this->mpi_exec);
+    this->assert_equal_mtxs(mat.get(), l_mat.get());
+    this->assert_equal_vecs(res.get(), exact.get());
+    if (this->rank == 0) {
+        delete values, row_ptrs, col_idxs;
+    }
+    delete local_values, local_row_ptrs, local_col_idxs;
+}
+
+
+TYPED_TEST(DistributedCsr, AdvancedAppliesToLocalDense)
+{
+    using value_type = typename TestFixture::value_type;
+    using index_type = typename TestFixture::index_type;
+    using Mtx = typename TestFixture::Mtx;
+    using DenseVec = gko::matrix::Dense<value_type>;
+    using size_type = gko::size_type;
+    std::shared_ptr<Mtx> mat{};
+    std::shared_ptr<Mtx> l_mat{};
+    std::shared_ptr<DenseVec> dvec{};
+    std::shared_ptr<DenseVec> expected{};
+    this->mpi_exec->set_root_rank(0);
+    gko::dim<2> local_size{};
+    value_type *values;
+    index_type *col_idxs;
+    index_type *row_ptrs;
+    value_type *local_values;
+    index_type *local_col_idxs;
+    index_type *local_row_ptrs;
+    gko::IndexSet<size_type> row_dist{6};
+    size_type num_rows;
+    auto global_size = gko::dim<2>(5, 5);
+    if (this->rank == 0) {
+        // clang-format off
+        /*  1.0  0.0  1.0  0.0 -1.0 ] rank 0
+         *  0.0  2.0  0.0  0.0  1.5 ] rank 1
+         * -2.0  0.0  4.0  0.0  6.0 } rank 0
+         *  0.5 -2.0  3.0  5.0  1.0 } rank 1
+         * -3.0  4.0  0.0  0.0  7.0 } rank 1
+         */
+        // clang-format on
+        values = new value_type[16]{1.0, 1.0,  -1.0, 2.0, 1.5, -2.0, 4.0, 6.0,
+                                    0.5, -2.0, 3.0,  5.0, 1.0, -3.0, 4.0, 7.0};
+        col_idxs =
+            new index_type[16]{0, 2, 4, 1, 4, 0, 2, 4, 0, 1, 2, 3, 4, 0, 1, 4};
+        row_ptrs = new index_type[6]{0, 3, 5, 8, 13, 16};
+        local_values = new value_type[6]{1.0, 1.0, -1.0, -2.0, 4.0, 6.0};
+        local_col_idxs = new index_type[6]{0, 2, 4, 0, 2, 4};
+        local_row_ptrs = new index_type[3]{0, 3, 6};
+        row_dist.add_index(0);
+        row_dist.add_index(2);
+        num_rows = 2;
+        local_size = gko::dim<2>(num_rows, 5);
+        expected = DenseVec::create(this->sub_exec, gko::dim<2>(num_rows, 1));
+        // clang-format off
+        /*
+         *  1.0  0.0  1.0  0.0 -1.0 ]
+         * -2.0  0.0  4.0  0.0  6.0 } rank 0
+         */
+        // clang-format on
+        l_mat = Mtx::create(
+            this->sub_exec, gko::dim<2>{2, 5},
+            gko::Array<value_type>::view(this->sub_exec, 6, local_values),
+            gko::Array<index_type>::view(this->sub_exec, 6, local_col_idxs),
+            gko::Array<index_type>::view(this->sub_exec, 3, local_row_ptrs),
+            std::make_shared<typename Mtx::load_balance>(2));
+    } else {
+        local_values = new value_type[10]{2.0, 1.5, 0.5,  -2.0, 3.0,
+                                          5.0, 1.0, -3.0, 4.0,  7.0};
+        local_col_idxs = new index_type[10]{1, 4, 0, 1, 2, 3, 4, 0, 1, 4};
+        local_row_ptrs = new index_type[4]{0, 2, 7, 10};
+        row_dist.add_index(1);
+        row_dist.add_index(3);
+        row_dist.add_index(4);
+        num_rows = 3;
+        local_size = gko::dim<2>(num_rows, 5);
+        expected = DenseVec::create(this->sub_exec, gko::dim<2>(num_rows, 1));
+        // clang-format off
+        /*
+         *  0.0  2.0  0.0  0.0  1.5 ] rank 1
+         *  0.5 -2.0  3.0  5.0  1.0 } rank 1
+         * -3.0  4.0  0.0  0.0  7.0 } rank 1
+         */
+        // clang-format on
+        l_mat = Mtx::create(
+            this->sub_exec, local_size,
+            gko::Array<value_type>::view(this->sub_exec, 10, local_values),
+            gko::Array<index_type>::view(this->sub_exec, 10, local_col_idxs),
+            gko::Array<index_type>::view(this->sub_exec, 4, local_row_ptrs),
+            std::make_shared<typename Mtx::load_balance>(2));
+    }
+    auto alpha =
+        gko::initialize<DenseVec>({I<value_type>({-1.0})}, this->sub_exec);
+    auto beta =
+        gko::initialize<DenseVec>({I<value_type>({2.0})}, this->sub_exec);
+    auto rhs = gko::initialize<DenseVec>(
+        1, I<value_type>({-3.0, 3.0, -5.0, 5.0, 1.0}), this->sub_exec);
+    auto exact = gko::initialize_and_distribute<DenseVec>(
+        1, row_dist, I<value_type>({11.0, -6.5, 7.0, -5.5, -25.0}),
+        this->mpi_exec);
+    auto res = gko::initialize_and_distribute<DenseVec>(
+        1, row_dist, I<value_type>({1.0, 0.5, -0.5, -1.0, 1.5}),
+        this->mpi_exec);
+    mat = Mtx::create_and_distribute(
+        this->mpi_exec, global_size, row_dist,
+        gko::Array<value_type>::view(this->sub_exec, 16, values),
+        gko::Array<index_type>::view(this->sub_exec, 16, col_idxs),
+        gko::Array<index_type>::view(this->sub_exec, 6, row_ptrs),
+        std::make_shared<typename Mtx::load_balance>(2));
+    l_mat->apply(alpha.get(), rhs.get(), beta.get(), expected.get());
+    mat->apply(alpha.get(), rhs.get(), beta.get(), res.get());
+    ASSERT_EQ(mat->get_executor(), this->mpi_exec);
+    this->assert_equal_mtxs(mat.get(), l_mat.get());
+    this->assert_equal_vecs(res.get(), exact.get());
+    if (this->rank == 0) {
+        delete values, row_ptrs, col_idxs;
+    }
+    delete local_values, local_row_ptrs, local_col_idxs;
+}
+
+
+TYPED_TEST(DistributedCsr, AdvancedAppliesToDistributedDense)
+{
+    using value_type = typename TestFixture::value_type;
+    using index_type = typename TestFixture::index_type;
+    using Mtx = typename TestFixture::Mtx;
+    using DenseVec = gko::matrix::Dense<value_type>;
+    using size_type = gko::size_type;
+    std::shared_ptr<Mtx> mat{};
+    std::shared_ptr<Mtx> l_mat{};
+    std::shared_ptr<DenseVec> dvec{};
+    std::shared_ptr<DenseVec> expected{};
+    this->mpi_exec->set_root_rank(0);
+    gko::dim<2> local_size{};
+    value_type *values;
+    index_type *col_idxs;
+    index_type *row_ptrs;
+    value_type *local_values;
+    index_type *local_col_idxs;
+    index_type *local_row_ptrs;
+    gko::IndexSet<size_type> row_dist{6};
+    size_type num_rows;
+    auto global_size = gko::dim<2>(5, 5);
+    if (this->rank == 0) {
+        // clang-format off
+        /*  1.0  0.0  1.0  0.0 -1.0 ] rank 0
+         *  0.0  2.0  0.0  0.0  1.5 ] rank 1
+         * -2.0  0.0  4.0  0.0  6.0 } rank 0
+         *  0.5 -2.0  3.0  5.0  1.0 } rank 1
+         * -3.0  4.0  0.0  0.0  7.0 } rank 1
+         */
+        // clang-format on
+        values = new value_type[16]{1.0, 1.0,  -1.0, 2.0, 1.5, -2.0, 4.0, 6.0,
+                                    0.5, -2.0, 3.0,  5.0, 1.0, -3.0, 4.0, 7.0};
+        col_idxs =
+            new index_type[16]{0, 2, 4, 1, 4, 0, 2, 4, 0, 1, 2, 3, 4, 0, 1, 4};
+        row_ptrs = new index_type[6]{0, 3, 5, 8, 13, 16};
+        local_values = new value_type[6]{1.0, 1.0, -1.0, -2.0, 4.0, 6.0};
+        local_col_idxs = new index_type[6]{0, 2, 4, 0, 2, 4};
+        local_row_ptrs = new index_type[3]{0, 3, 6};
+        row_dist.add_index(0);
+        row_dist.add_index(2);
+        num_rows = 2;
+        local_size = gko::dim<2>(num_rows, 5);
+        expected = DenseVec::create(this->sub_exec, gko::dim<2>(num_rows, 1));
+        // clang-format off
+        /*
+         *  1.0  0.0  1.0  0.0 -1.0 ]
+         * -2.0  0.0  4.0  0.0  6.0 } rank 0
+         */
+        // clang-format on
+        l_mat = Mtx::create(
+            this->sub_exec, gko::dim<2>{2, 5},
+            gko::Array<value_type>::view(this->sub_exec, 6, local_values),
+            gko::Array<index_type>::view(this->sub_exec, 6, local_col_idxs),
+            gko::Array<index_type>::view(this->sub_exec, 3, local_row_ptrs),
+            std::make_shared<typename Mtx::load_balance>(2));
+    } else {
+        local_values = new value_type[10]{2.0, 1.5, 0.5,  -2.0, 3.0,
+                                          5.0, 1.0, -3.0, 4.0,  7.0};
+        local_col_idxs = new index_type[10]{1, 4, 0, 1, 2, 3, 4, 0, 1, 4};
+        local_row_ptrs = new index_type[4]{0, 2, 7, 10};
+        row_dist.add_index(1);
+        row_dist.add_index(3);
+        row_dist.add_index(4);
+        num_rows = 3;
+        local_size = gko::dim<2>(num_rows, 5);
+        expected = DenseVec::create(this->sub_exec, gko::dim<2>(num_rows, 1));
+        // clang-format off
+        /*
+         *  0.0  2.0  0.0  0.0  1.5 ] rank 1
+         *  0.5 -2.0  3.0  5.0  1.0 } rank 1
+         * -3.0  4.0  0.0  0.0  7.0 } rank 1
+         */
+        // clang-format on
+        l_mat = Mtx::create(
+            this->sub_exec, local_size,
+            gko::Array<value_type>::view(this->sub_exec, 10, local_values),
+            gko::Array<index_type>::view(this->sub_exec, 10, local_col_idxs),
+            gko::Array<index_type>::view(this->sub_exec, 4, local_row_ptrs),
+            std::make_shared<typename Mtx::load_balance>(2));
+    }
+    auto alpha =
+        gko::initialize<DenseVec>({I<value_type>({-1.0})}, this->sub_exec);
+    auto beta =
+        gko::initialize<DenseVec>({I<value_type>({2.0})}, this->sub_exec);
+    auto rhs = gko::initialize<DenseVec>(
+        1, I<value_type>({-3.0, 3.0, -5.0, 5.0, 1.0}), this->sub_exec);
+    auto dist_rhs = gko::initialize_and_distribute<DenseVec>(
+        1, row_dist, I<value_type>({-3.0, 3.0, -5.0, 5.0, 1.0}),
+        this->mpi_exec);
+    auto exact = gko::initialize_and_distribute<DenseVec>(
+        1, row_dist, I<value_type>({11.0, -6.5, 7.0, -5.5, -25.0}),
+        this->mpi_exec);
+    auto res = gko::initialize_and_distribute<DenseVec>(
+        1, row_dist, I<value_type>({1.0, 0.5, -0.5, -1.0, 1.5}),
+        this->mpi_exec);
+    mat = Mtx::create_and_distribute(
+        this->mpi_exec, global_size, row_dist,
+        gko::Array<value_type>::view(this->sub_exec, 16, values),
+        gko::Array<index_type>::view(this->sub_exec, 16, col_idxs),
+        gko::Array<index_type>::view(this->sub_exec, 6, row_ptrs),
+        std::make_shared<typename Mtx::load_balance>(2));
+    l_mat->apply(alpha.get(), rhs.get(), beta.get(), expected.get());
+    mat->apply(alpha.get(), dist_rhs.get(), beta.get(), res.get());
+    ASSERT_EQ(mat->get_executor(), this->mpi_exec);
+    // this->assert_equal_mtxs(mat.get(), l_mat.get());
+    this->assert_equal_vecs(res.get(), exact.get());
+    if (this->rank == 0) {
+        delete values, row_ptrs, col_idxs;
+    }
+    delete local_values, local_row_ptrs, local_col_idxs;
 }
 
 
