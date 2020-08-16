@@ -1,0 +1,1 @@
+ginkgo_create_mpi_test(distributed_cg 2)

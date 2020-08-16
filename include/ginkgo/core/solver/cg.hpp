@@ -152,16 +152,10 @@ protected:
     void apply_impl(const LinOp *alpha, const LinOp *b, const LinOp *beta,
                     LinOp *x) const override;
 
-    void distributed_apply_impl(const LinOp *b, LinOp *x) const override
-    {
-        this->apply_impl(b, x);
-    }
+    void distributed_apply_impl(const LinOp *b, LinOp *x) const override;
 
     void distributed_apply_impl(const LinOp *alpha, const LinOp *b,
-                                const LinOp *beta, LinOp *x) const override
-    {
-        this->apply_impl(alpha, b, beta, x);
-    }
+                                const LinOp *beta, LinOp *x) const override;
 
     explicit Cg(std::shared_ptr<const Executor> exec)
         : EnableLinOp<Cg>(std::move(exec))
@@ -170,7 +164,8 @@ protected:
     explicit Cg(const Factory *factory,
                 std::shared_ptr<const LinOp> system_matrix)
         : EnableLinOp<Cg>(factory->get_executor(),
-                          gko::transpose(system_matrix->get_size())),
+                          gko::transpose(system_matrix->get_size()),
+                          gko::transpose(system_matrix->get_global_size())),
           parameters_{factory->get_parameters()},
           system_matrix_{std::move(system_matrix)}
     {

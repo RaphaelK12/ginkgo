@@ -391,7 +391,7 @@ protected:
         auto b_exec = b->get_executor();
         if (dynamic_cast<const gko::MpiExecutor *>(b_exec.get())) {
             GKO_ASSERT_CONFORMANT_DIST(this, b);
-            GKO_ASSERT_EQUAL_ROWS(this, x);
+            // TODO Some additional checks needed here  ?
             GKO_ASSERT_EQUAL_COLS_DIST(b, x);
         } else {
             GKO_ASSERT_CONFORMANT(this, b);

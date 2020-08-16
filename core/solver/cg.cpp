@@ -172,6 +172,95 @@ void Cg<ValueType>::apply_impl(const LinOp *alpha, const LinOp *b,
 }
 
 
+template <typename ValueType>
+void Cg<ValueType>::distributed_apply_impl(const LinOp *b, LinOp *x) const
+{
+    using std::swap;
+    using Vector = matrix::Dense<ValueType>;
+
+    constexpr uint8 RelativeStoppingId{1};
+
+    auto exec = this->get_executor();
+    auto mpi_exec = as<gko::MpiExecutor>(exec.get());
+    auto sub_exec = mpi_exec->get_sub_executor();
+    auto my_rank = mpi_exec->get_my_rank();
+    auto one_op = initialize<Vector>({one<ValueType>()}, sub_exec);
+    auto neg_one_op = initialize<Vector>({-one<ValueType>()}, sub_exec);
+
+    auto dense_b = as<const Vector>(b);
+    auto dense_x = as<Vector>(x);
+    auto r = Vector::create_with_config_of(dense_b);
+    auto z = Vector::create_with_config_of(dense_b);
+    auto p = Vector::create_with_config_of(dense_b);
+    auto q = Vector::create_with_config_of(dense_b);
+
+    auto alpha = Vector::create(sub_exec, dim<2>{1, dense_b->get_size()[1]});
+    auto beta = Vector::create_with_config_of(alpha.get());
+    auto prev_rho = Vector::create_with_config_of(alpha.get());
+    auto rho = Vector::create_with_config_of(alpha.get());
+
+    bool one_changed{};
+    Array<stopping_status> stop_status(alpha->get_executor(),
+                                       dense_b->get_global_size()[1]);
+
+    // TODO: replace this with automatic merged kernel generator
+    sub_exec->run(cg::make_initialize(dense_b, r.get(), z.get(), p.get(),
+                                      q.get(), prev_rho.get(), rho.get(),
+                                      &stop_status));
+    // r = dense_b
+    // rho = 0.0
+    // prev_rho = 1.0
+    // z = p = q = 0
+    system_matrix_->apply(neg_one_op.get(), dense_x, one_op.get(), r.get());
+    auto stop_criterion = stop_criterion_factory_->generate(
+        system_matrix_, std::shared_ptr<const LinOp>(b, [](const LinOp *) {}),
+        x, r.get());
+
+    int iter = -1;
+    while (true) {
+        get_preconditioner()->apply(r.get(), z.get());
+        r->compute_dot(z.get(), rho.get());
+
+        ++iter;
+        this->template log<log::Logger::iteration_complete>(this, iter, r.get(),
+                                                            dense_x);
+        if (stop_criterion->update()
+                .num_iterations(iter)
+                .residual(r.get())
+                .solution(dense_x)
+                .check(RelativeStoppingId, true, &stop_status, &one_changed)) {
+            break;
+        }
+
+        sub_exec->run(cg::make_step_1(p.get(), z.get(), rho.get(),
+                                      prev_rho.get(), &stop_status));
+        // tmp = rho / prev_rho
+        // p = z + tmp * p
+        system_matrix_->apply(p.get(), q.get());
+        p->compute_dot(q.get(), beta.get());
+        sub_exec->run(cg::make_step_2(dense_x, r.get(), p.get(), q.get(),
+                                      beta.get(), rho.get(), &stop_status));
+        // tmp = rho / beta
+        // x = x + tmp * p
+        // r = r - tmp * q
+        swap(prev_rho, rho);
+    }
+}
+
+
+template <typename ValueType>
+void Cg<ValueType>::distributed_apply_impl(const LinOp *alpha, const LinOp *b,
+                                           const LinOp *beta, LinOp *x) const
+{
+    auto dense_x = as<matrix::Dense<ValueType>>(x);
+
+    auto x_clone = dense_x->clone();
+    this->apply(b, x_clone.get());
+    dense_x->scale(beta);
+    dense_x->add_scaled(alpha, x_clone.get());
+}
+
+
 #define GKO_DECLARE_CG(_type) class Cg<_type>
 GKO_INSTANTIATE_FOR_EACH_VALUE_TYPE(GKO_DECLARE_CG);
 
