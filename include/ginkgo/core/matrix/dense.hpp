@@ -565,6 +565,19 @@ protected:
     }
 
     /**
+     * Creates an uninitialized Dense matrix of the specified size.
+     *
+     * @param exec  Executor associated to the matrix
+     * @param size  size of the matrix
+     * @param index_set  IndexSet describing the indices on a global set held by
+     *                   this Dense object.
+     */
+    Dense(std::shared_ptr<const Executor> exec, const dim<2> &size,
+          IndexSet<size_type> index_set)
+        : Dense(std::move(exec), size, index_set, size[1])
+    {}
+
+    /**
      * Creates a Dense matrix from an already allocated (and initialized) array.
      *
      * @tparam ValuesArray  type of array of values
@@ -670,6 +683,15 @@ protected:
                                                   size_type stride)
     {
         return Dense::create(exec, size, index_set, stride);
+    }
+
+
+    template <typename ExecType>
+    static std::unique_ptr<Dense> distribute_impl(ExecType &exec,
+                                                  const dim<2> &size,
+                                                  IndexSet<size_type> index_set)
+    {
+        return Dense::create(exec, size, index_set);
     }
 
 
