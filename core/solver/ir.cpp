@@ -161,6 +161,92 @@ void Ir<ValueType>::apply_impl(const LinOp *alpha, const LinOp *b,
 }
 
 
+template <typename ValueType>
+void Ir<ValueType>::distributed_apply_impl(const LinOp *b, LinOp *x) const
+{
+    using Vector = matrix::Dense<ValueType>;
+    constexpr uint8 relative_stopping_id{1};
+
+    auto exec = this->get_executor();
+    auto mpi_exec = as<gko::MpiExecutor>(exec.get());
+    auto sub_exec = mpi_exec->get_sub_executor();
+    auto my_rank = mpi_exec->get_my_rank();
+    auto one_op = initialize<Vector>({one<ValueType>()}, sub_exec);
+    auto neg_one_op = initialize<Vector>({-one<ValueType>()}, sub_exec);
+
+    auto dense_b = as<const Vector>(b);
+    auto dense_x = as<Vector>(x);
+    auto residual = Vector::create_with_config_of(dense_b);
+    auto inner_solution = Vector::create_with_config_of(dense_b);
+
+    bool one_changed{};
+    Array<stopping_status> stop_status(sub_exec, dense_b->get_global_size()[1]);
+    sub_exec->run(ir::make_initialize(&stop_status));
+
+    residual->copy_from(dense_b);
+    system_matrix_->apply(lend(neg_one_op), dense_x, lend(one_op),
+                          lend(residual));
+
+    auto stop_criterion = stop_criterion_factory_->generate(
+        system_matrix_, std::shared_ptr<const LinOp>(b, [](const LinOp *) {}),
+        x, lend(residual));
+
+    int iter = -1;
+    while (true) {
+        ++iter;
+        this->template log<log::Logger::iteration_complete>(
+            this, iter, lend(residual), dense_x);
+
+        if (stop_criterion->update()
+                .num_iterations(iter)
+                .residual(lend(residual))
+                .solution(dense_x)
+                .check(relative_stopping_id, true, &stop_status,
+                       &one_changed)) {
+            break;
+        }
+
+        if (solver_->apply_uses_initial_guess()) {
+            // Use the inner solver to solve
+            // A * inner_solution = residual
+            // with residual as initial guess.
+            inner_solution->copy_from(lend(residual));
+            solver_->apply(lend(residual), lend(inner_solution));
+
+            // x = x + relaxation_factor * inner_solution
+            dense_x->add_scaled(lend(relaxation_factor_), lend(inner_solution));
+
+            // residual = b - A * x
+            residual->copy_from(dense_b);
+            system_matrix_->apply(lend(neg_one_op), dense_x, lend(one_op),
+                                  lend(residual));
+        } else {
+            // x = x + relaxation_factor * A \ residual
+            solver_->apply(lend(relaxation_factor_), lend(residual),
+                           lend(one_op), dense_x);
+
+            // residual = b - A * x
+            residual->copy_from(dense_b);
+            system_matrix_->apply(lend(neg_one_op), dense_x, lend(one_op),
+                                  lend(residual));
+        }
+    }
+}
+
+
+template <typename ValueType>
+void Ir<ValueType>::distributed_apply_impl(const LinOp *alpha, const LinOp *b,
+                                           const LinOp *beta, LinOp *x) const
+{
+    auto dense_x = as<matrix::Dense<ValueType>>(x);
+
+    auto x_clone = dense_x->clone();
+    this->apply(b, x_clone.get());
+    dense_x->scale(beta);
+    dense_x->add_scaled(alpha, x_clone.get());
+}
+
+
 #define GKO_DECLARE_IR(_type) class Ir<_type>
 GKO_INSTANTIATE_FOR_EACH_VALUE_TYPE(GKO_DECLARE_IR);
 

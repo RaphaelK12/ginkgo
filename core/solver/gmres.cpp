@@ -310,6 +310,259 @@ void Gmres<ValueType>::apply_impl(const LinOp *alpha, const LinOp *b,
 }
 
 
+template <typename ValueType>
+void Gmres<ValueType>::distributed_apply_impl(const LinOp *b, LinOp *x) const
+{
+    using Vector = matrix::Dense<ValueType>;
+    using NormVector = matrix::Dense<remove_complex<ValueType>>;
+
+    constexpr uint8 RelativeStoppingId{1};
+
+    auto exec = this->get_executor();
+    auto mpi_exec = as<gko::MpiExecutor>(exec.get());
+    auto sub_exec = mpi_exec->get_sub_executor();
+    auto my_rank = mpi_exec->get_my_rank();
+
+    auto one_op = initialize<Vector>({one<ValueType>()}, sub_exec);
+    auto neg_one_op = initialize<Vector>({-one<ValueType>()}, sub_exec);
+
+    auto dense_b = as<const Vector>(b);
+    auto dense_x = as<Vector>(x);
+    auto residual = Vector::create_with_config_of(dense_b);
+
+    auto krylov_bases = Vector::create(
+        sub_exec, dim<2>{system_matrix_->get_size()[1] * (krylov_dim_ + 1),
+                         dense_b->get_size()[1]});
+    std::shared_ptr<matrix::Dense<ValueType>> preconditioned_vector =
+        Vector::create_with_config_of(dense_b);
+    auto hessenberg = Vector::create(
+        sub_exec,
+        dim<2>{krylov_dim_ + 1, krylov_dim_ * dense_b->get_size()[1]});
+    auto givens_sin =
+        Vector::create(sub_exec, dim<2>{krylov_dim_, dense_b->get_size()[1]});
+    auto givens_cos =
+        Vector::create(sub_exec, dim<2>{krylov_dim_, dense_b->get_size()[1]});
+    auto residual_norm_collection = Vector::create(
+        sub_exec, dim<2>{krylov_dim_ + 1, dense_b->get_size()[1]});
+    auto residual_norm =
+        NormVector::create(sub_exec, dim<2>{1, dense_b->get_size()[1]});
+    Array<size_type> final_iter_nums(this->get_executor()->get_sub_executor(),
+                                     dense_b->get_size()[1]);
+    auto y =
+        Vector::create(sub_exec, dim<2>{krylov_dim_, dense_b->get_size()[1]});
+
+
+    // auto krylov_bases = Vector::create_and_distribute(
+    //     exec,
+    //     dim<2>{system_matrix_->get_global_size()[1] * (krylov_dim_ + 1),
+    //            dense_b->get_global_size()[1]},
+    //     dense_b->get_index_set());
+    // std::shared_ptr<matrix::Dense<ValueType>> preconditioned_vector =
+    //     Vector::create_with_config_of(dense_b);
+    // auto hessenberg = Vector::create_and_distribute(
+    //     exec,
+    //     dim<2>{krylov_dim_ + 1, krylov_dim_ * dense_b->get_global_size()[1]},
+    //     dense_b->get_index_set());
+    // auto givens_sin = Vector::create_and_distribute(
+    //     exec, dim<2>{krylov_dim_, dense_b->get_global_size()[1]},
+    //     dense_b->get_index_set());
+    // auto givens_cos = Vector::create_and_distribute(
+    //     exec, dim<2>{krylov_dim_, dense_b->get_global_size()[1]},
+    //     dense_b->get_index_set());
+    // auto residual_norm_collection = Vector::create_and_distribute(
+    //     exec, dim<2>{krylov_dim_ + 1, dense_b->get_global_size()[1]},
+    //     dense_b->get_index_set());
+    // auto residual_norm = NormVector::create_and_distribute(
+    //     exec, dim<2>{1, dense_b->get_global_size()[1]},
+    //     dense_b->get_index_set());
+    // Array<size_type> final_iter_nums(this->get_executor(),
+    //                                  dense_b->get_global_size()[1]);
+    // auto y = Vector::create_and_distribute(
+    //     exec, dim<2>{krylov_dim_, dense_b->get_global_size()[1]},
+    //     dense_b->get_index_set());
+
+    bool one_changed{};
+    Array<stopping_status> stop_status(this->get_executor(),
+                                       dense_b->get_global_size()[1]);
+
+    // Initialization
+    sub_exec->run(gmres::make_initialize_1(dense_b, residual.get(),
+                                           givens_sin.get(), givens_cos.get(),
+                                           &stop_status, krylov_dim_));
+    // residual = dense_b
+    // givens_sin = givens_cos = 0
+    system_matrix_->apply(neg_one_op.get(), dense_x, one_op.get(),
+                          residual.get());
+    // residual = residual - Ax
+    sub_exec->run(gmres::make_initialize_2(
+        residual.get(), residual_norm.get(), residual_norm_collection.get(),
+        krylov_bases.get(), &final_iter_nums, krylov_dim_));
+    // residual_norm = norm(residual)
+    // residual_norm_collection = {residual_norm, unchanged}
+    // krylov_bases(:, 1) = residual / residual_norm
+    // final_iter_nums = {0, ..., 0}
+
+    auto stop_criterion = stop_criterion_factory_->generate(
+        system_matrix_, std::shared_ptr<const LinOp>(b, [](const LinOp *) {}),
+        x, residual.get());
+
+    int total_iter = -1;
+    size_type restart_iter = 0;
+
+    auto before_preconditioner =
+        matrix::Dense<ValueType>::create_with_config_of(dense_x);
+    auto after_preconditioner =
+        matrix::Dense<ValueType>::create_with_config_of(dense_x);
+
+    while (true) {
+        ++total_iter;
+        this->template log<log::Logger::iteration_complete>(
+            this, total_iter, residual.get(), dense_x, residual_norm.get());
+        if (stop_criterion->update()
+                .num_iterations(total_iter)
+                .residual(residual.get())
+                .residual_norm(residual_norm.get())
+                .solution(dense_x)
+                .check(RelativeStoppingId, true, &stop_status, &one_changed)) {
+            break;
+        }
+
+
+        if (restart_iter == krylov_dim_) {
+            // Restart
+            sub_exec->run(gmres::make_step_2(
+                residual_norm_collection.get(), krylov_bases.get(),
+                hessenberg.get(), y.get(), before_preconditioner.get(),
+                &final_iter_nums));
+            // Solve upper triangular.
+            // y = hessenberg \ residual_norm_collection
+            // before_preconditioner = krylov_bases * y
+
+            get_preconditioner()->apply(before_preconditioner.get(),
+                                        after_preconditioner.get());
+            dense_x->add_scaled(one_op.get(), after_preconditioner.get());
+            // Solve x
+            // x = x + get_preconditioner() * before_preconditioner
+            residual->copy_from(dense_b);
+            // residual = dense_b
+            system_matrix_->apply(neg_one_op.get(), dense_x, one_op.get(),
+                                  residual.get());
+            // residual = residual - Ax
+            sub_exec->run(gmres::make_initialize_2(
+                residual.get(), residual_norm.get(),
+                residual_norm_collection.get(), krylov_bases.get(),
+                &final_iter_nums, krylov_dim_));
+            // residual_norm = norm(residual)
+            // residual_norm_collection = {residual_norm, unchanged}
+            // krylov_bases(:, 1) = residual / residual_norm
+            // final_iter_nums = {0, ..., 0}
+            restart_iter = 0;
+        }
+        auto this_krylov = krylov_bases->create_submatrix(
+            span{system_matrix_->get_size()[0] * restart_iter,
+                 system_matrix_->get_size()[0] * (restart_iter + 1)},
+            span{0, dense_b->get_size()[1]});
+
+        auto next_krylov = krylov_bases->create_submatrix(
+            span{system_matrix_->get_size()[0] * (restart_iter + 1),
+                 system_matrix_->get_size()[0] * (restart_iter + 2)},
+            span{0, dense_b->get_size()[1]});
+        get_preconditioner()->apply(this_krylov.get(),
+                                    preconditioned_vector.get());
+        // preconditioned_vector = get_preconditioner() * this_krylov
+
+        // Do Arnoldi and givens rotation
+        auto hessenberg_iter = hessenberg->create_submatrix(
+            span{0, restart_iter + 2},
+            span{dense_b->get_size()[1] * restart_iter,
+                 dense_b->get_size()[1] * (restart_iter + 1)});
+
+        // Start of arnoldi
+        system_matrix_->apply(preconditioned_vector.get(), next_krylov.get());
+        // next_krylov = A * preconditioned_vector
+
+        sub_exec->run(gmres::make_step_1(
+            dense_b->get_size()[0], givens_sin.get(), givens_cos.get(),
+            residual_norm.get(), residual_norm_collection.get(),
+            krylov_bases.get(), hessenberg_iter.get(), restart_iter,
+            &final_iter_nums, &stop_status));
+        // final_iter_nums += 1 (unconverged)
+        // next_krylov_basis is alias for (restart_iter + 1)-th krylov_bases
+        // for i in 0:restart_iter(include)
+        //     hessenberg(restart_iter, i) = next_krylov_basis' *
+        //         krylov_bases(:, i)
+        //     next_krylov_basis  -= hessenberg(restart_iter, i) *
+        //         krylov_bases(:, i)
+        // end
+        // hessenberg(restart_iter+1, restart_iter) = norm(next_krylov_basis)
+        // next_krylov_basis /= hessenberg(restart_iter + 1, restart_iter)
+        // End of arnoldi
+        // Start apply givens rotation
+        // for j in 0:restart_iter(exclude)
+        //     temp             =  cos(j)*hessenberg(j) +
+        //                         sin(j)*hessenberg(j+1)
+        //     hessenberg(j+1)  = -conj(sin(j))*hessenberg(j) +
+        //                         conj(cos(j))*hessenberg(j+1)
+        //     hessenberg(j)    =  temp;
+        // end
+        // Calculate sin and cos
+        // this_hess = hessenberg(restart_iter)
+        // next_hess = hessenberg(restart_iter+1)
+        // hypotenuse = sqrt(this_hess * this_hess + next_hess * next_hess);
+        // cos(restart_iter) = conj(this_hess) / hypotenuse;
+        // sin(restart_iter) = conj(next_hess) / this_hess
+        // hessenberg(restart_iter)   =
+        //      cos(restart_iter)*hessenberg(restart_iter) +
+        //      sin(restart_iter)*hessenberg(restart_iter)
+        // hessenberg(restart_iter+1) = 0
+        // End apply givens rotation
+        // Calculate residual norm
+        // this_rnc = residual_norm_collection(restart_iter)
+        // next_rnc = -conj(sin(restart_iter)) * this_rnc
+        // residual_norm_collection(restart_iter) = cos(restart_iter) * this_rnc
+        // residual_norm = abs(next_rnc)
+        // residual_norm_collection(restart_iter + 1) = next_rnc
+
+        restart_iter++;
+    }
+
+    // Solve x
+    auto krylov_bases_small = krylov_bases->create_submatrix(
+        span{0, system_matrix_->get_size()[0] * (restart_iter + 1)},
+        span{0, dense_b->get_size()[1]});
+    auto hessenberg_small = hessenberg->create_submatrix(
+        span{0, restart_iter},
+        span{0, dense_b->get_size()[1] * (restart_iter)});
+
+    sub_exec->run(gmres::make_step_2(
+        residual_norm_collection.get(), krylov_bases_small.get(),
+        hessenberg_small.get(), y.get(), before_preconditioner.get(),
+        &final_iter_nums));
+    // Solve upper triangular.
+    // y = hessenberg \ residual_norm_collection
+    // before_preconditioner = krylov_bases * y
+    get_preconditioner()->apply(before_preconditioner.get(),
+                                after_preconditioner.get());
+    dense_x->add_scaled(one_op.get(), after_preconditioner.get());
+    // Solve x
+    // x = x + get_preconditioner() * before_preconditioner
+}
+
+
+template <typename ValueType>
+void Gmres<ValueType>::distributed_apply_impl(
+    const LinOp *alpha, const LinOp *b, const LinOp *residual_norm_collection,
+    LinOp *x) const
+{
+    auto dense_x = as<matrix::Dense<ValueType>>(x);
+
+    auto x_clone = dense_x->clone();
+    this->apply(b, x_clone.get());
+    dense_x->scale(residual_norm_collection);
+    dense_x->add_scaled(alpha, x_clone.get());
+}
+
+
 #define GKO_DECLARE_GMRES(_type) class Gmres<_type>
 GKO_INSTANTIATE_FOR_EACH_VALUE_TYPE(GKO_DECLARE_GMRES);
 

@@ -42,7 +42,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <ginkgo/core/base/executor.hpp>
 #include <ginkgo/core/base/index_set.hpp>
 #include <ginkgo/core/matrix/dense.hpp>
-#include <ginkgo/core/solver/cg.hpp>
+#include <ginkgo/core/solver/gmres.hpp>
 #include <ginkgo/core/stop/combined.hpp>
 #include <ginkgo/core/stop/iteration.hpp>
 #include <ginkgo/core/stop/residual_norm.hpp>
@@ -55,14 +55,16 @@ namespace {
 
 
 template <typename T>
-class DistributedCg : public ::testing::Test {
+class DistributedGmres : public ::testing::Test {
 protected:
     using value_type = T;
     using Mtx = gko::matrix::Dense<value_type>;
-    using Solver = gko::solver::Cg<value_type>;
+    using Solver = gko::solver::Gmres<value_type>;
 
+    static constexpr gko::remove_complex<T> reduction_factor =
+        gko::remove_complex<T>(1e-6);
 
-    DistributedCg() : mpi_exec(nullptr) {}
+    DistributedGmres() : mpi_exec(nullptr) {}
 
     void SetUp()
     {
@@ -75,17 +77,16 @@ protected:
         ASSERT_GT(mpi_exec->get_num_ranks(), 1);
         mtx = gko::initialize<Mtx>(
             {{2, -1.0, 0.0}, {-1.0, 2, -1.0}, {0.0, -1.0, 2}}, sub_exec);
-        reduction_factor = gko::remove_complex<T>{1e-6};
-        cg_factory =
+        gmres_factory =
             Solver::build()
                 .with_criteria(
-                    gko::stop::Iteration::build().with_max_iters(3u).on(
+                    gko::stop::Iteration::build().with_max_iters(30u).on(
                         mpi_exec),
                     gko::stop::ResidualNormReduction<value_type>::build()
-                        .with_reduction_factor(reduction_factor)
+                        .with_reduction_factor(gko::remove_complex<T>{1e-6})
                         .on(mpi_exec))
                 .on(mpi_exec);
-        solver = cg_factory->generate(mtx);
+        solver = gmres_factory->generate(mtx);
     }
 
     void TearDown()
@@ -100,9 +101,8 @@ protected:
     std::shared_ptr<const gko::Executor> exec;
     std::shared_ptr<const gko::Executor> sub_exec;
     std::shared_ptr<Mtx> mtx;
-    std::unique_ptr<typename Solver::Factory> cg_factory;
+    std::unique_ptr<typename Solver::Factory> gmres_factory;
     std::unique_ptr<gko::LinOp> solver;
-    gko::remove_complex<T> reduction_factor;
     int rank;
 
     static void assert_same_matrices(const Mtx *m1, const Mtx *m2)
@@ -117,31 +117,31 @@ protected:
     }
 };
 
-TYPED_TEST_CASE(DistributedCg, gko::test::ValueTypes);
+TYPED_TEST_CASE(DistributedGmres, gko::test::ValueTypes);
 
 
-TYPED_TEST(DistributedCg, DistributedCgFactoryKnowsItsExecutor)
+TYPED_TEST(DistributedGmres, DistributedGmresFactoryKnowsItsExecutor)
 {
-    ASSERT_EQ(this->cg_factory->get_executor(), this->mpi_exec);
+    ASSERT_EQ(this->gmres_factory->get_executor(), this->mpi_exec);
 }
 
 
-TYPED_TEST(DistributedCg, DistributedCgFactoryCreatesCorrectSolver)
+TYPED_TEST(DistributedGmres, DistributedGmresFactoryCreatesCorrectSolver)
 {
     using Solver = typename TestFixture::Solver;
 
     ASSERT_EQ(this->solver->get_size(), gko::dim<2>(3, 3));
-    auto cg_solver = static_cast<Solver *>(this->solver.get());
-    ASSERT_NE(cg_solver->get_system_matrix(), nullptr);
-    ASSERT_EQ(cg_solver->get_system_matrix(), this->mtx);
+    auto gmres_solver = static_cast<Solver *>(this->solver.get());
+    ASSERT_NE(gmres_solver->get_system_matrix(), nullptr);
+    ASSERT_EQ(gmres_solver->get_system_matrix(), this->mtx);
 }
 
 
-TYPED_TEST(DistributedCg, CanBeCopied)
+TYPED_TEST(DistributedGmres, CanBeCopied)
 {
     using Mtx = typename TestFixture::Mtx;
     using Solver = typename TestFixture::Solver;
-    auto copy = this->cg_factory->generate(Mtx::create(this->exec));
+    auto copy = this->gmres_factory->generate(Mtx::create(this->exec));
 
     copy->copy_from(this->solver.get());
 
@@ -152,11 +152,11 @@ TYPED_TEST(DistributedCg, CanBeCopied)
 }
 
 
-TYPED_TEST(DistributedCg, CanBeMoved)
+TYPED_TEST(DistributedGmres, CanBeMoved)
 {
     using Mtx = typename TestFixture::Mtx;
     using Solver = typename TestFixture::Solver;
-    auto copy = this->cg_factory->generate(Mtx::create(this->exec));
+    auto copy = this->gmres_factory->generate(Mtx::create(this->exec));
 
     copy->copy_from(std::move(this->solver));
 
@@ -167,7 +167,7 @@ TYPED_TEST(DistributedCg, CanBeMoved)
 }
 
 
-TYPED_TEST(DistributedCg, CanBeCloned)
+TYPED_TEST(DistributedGmres, CanBeCloned)
 {
     using Mtx = typename TestFixture::Mtx;
     using Solver = typename TestFixture::Solver;
@@ -180,7 +180,7 @@ TYPED_TEST(DistributedCg, CanBeCloned)
 }
 
 
-TYPED_TEST(DistributedCg, CanBeCleared)
+TYPED_TEST(DistributedGmres, CanBeCleared)
 {
     using Solver = typename TestFixture::Solver;
     this->solver->clear();
@@ -192,17 +192,17 @@ TYPED_TEST(DistributedCg, CanBeCleared)
 }
 
 
-TYPED_TEST(DistributedCg, ApplyUsesInitialGuessReturnsTrue)
+TYPED_TEST(DistributedGmres, ApplyUsesInitialGuessReturnsTrue)
 {
     ASSERT_TRUE(this->solver->apply_uses_initial_guess());
 }
 
 
-TYPED_TEST(DistributedCg, CanSetPreconditionerGenerator)
+TYPED_TEST(DistributedGmres, CanSetPreconditionerGenerator)
 {
     using Solver = typename TestFixture::Solver;
     using value_type = typename TestFixture::value_type;
-    auto cg_factory =
+    auto gmres_factory =
         Solver::build()
             .with_criteria(
                 gko::stop::Iteration::build().with_max_iters(3u).on(this->exec),
@@ -217,9 +217,9 @@ TYPED_TEST(DistributedCg, CanSetPreconditionerGenerator)
                             this->exec))
                     .on(this->exec))
             .on(this->exec);
-    auto solver = cg_factory->generate(this->mtx);
-    auto precond = dynamic_cast<const gko::solver::Cg<value_type> *>(
-        static_cast<gko::solver::Cg<value_type> *>(solver.get())
+    auto solver = gmres_factory->generate(this->mtx);
+    auto precond = dynamic_cast<const gko::solver::Gmres<value_type> *>(
+        static_cast<gko::solver::Gmres<value_type> *>(solver.get())
             ->get_preconditioner()
             .get());
 
@@ -229,40 +229,41 @@ TYPED_TEST(DistributedCg, CanSetPreconditionerGenerator)
 }
 
 
-TYPED_TEST(DistributedCg, CanSetPreconditionerInFactory)
+TYPED_TEST(DistributedGmres, CanSetPreconditionerInFactory)
 {
     using Solver = typename TestFixture::Solver;
-    std::shared_ptr<Solver> cg_precond =
+    std::shared_ptr<Solver> gmres_precond =
         Solver::build()
             .with_criteria(
                 gko::stop::Iteration::build().with_max_iters(3u).on(this->exec))
             .on(this->exec)
             ->generate(this->mtx);
 
-    auto cg_factory =
+    auto gmres_factory =
         Solver::build()
             .with_criteria(
                 gko::stop::Iteration::build().with_max_iters(3u).on(this->exec))
-            .with_generated_preconditioner(cg_precond)
+            .with_generated_preconditioner(gmres_precond)
             .on(this->exec);
-    auto solver = cg_factory->generate(this->mtx);
+    auto solver = gmres_factory->generate(this->mtx);
     auto precond = solver->get_preconditioner();
 
     ASSERT_NE(precond.get(), nullptr);
-    ASSERT_EQ(precond.get(), cg_precond.get());
+    ASSERT_EQ(precond.get(), gmres_precond.get());
 }
 
 
-TYPED_TEST(DistributedCg, CanSetCriteriaAgain)
+TYPED_TEST(DistributedGmres, CanSetCriteriaAgain)
 {
     using Solver = typename TestFixture::Solver;
     std::shared_ptr<gko::stop::CriterionFactory> init_crit =
         gko::stop::Iteration::build().with_max_iters(3u).on(this->exec);
-    auto cg_factory = Solver::build().with_criteria(init_crit).on(this->exec);
+    auto gmres_factory =
+        Solver::build().with_criteria(init_crit).on(this->exec);
 
-    ASSERT_EQ((cg_factory->get_parameters().criteria).back(), init_crit);
+    ASSERT_EQ((gmres_factory->get_parameters().criteria).back(), init_crit);
 
-    auto solver = cg_factory->generate(this->mtx);
+    auto solver = gmres_factory->generate(this->mtx);
     std::shared_ptr<gko::stop::CriterionFactory> new_crit =
         gko::stop::Iteration::build().with_max_iters(5u).on(this->exec);
 
@@ -277,83 +278,85 @@ TYPED_TEST(DistributedCg, CanSetCriteriaAgain)
 }
 
 
-TYPED_TEST(DistributedCg, ThrowsOnWrongPreconditionerInFactory)
+TYPED_TEST(DistributedGmres, ThrowsOnWrongPreconditionerInFactory)
 {
     using Mtx = typename TestFixture::Mtx;
     using Solver = typename TestFixture::Solver;
     std::shared_ptr<Mtx> wrong_sized_mtx =
         Mtx::create(this->exec, gko::dim<2>{1, 3});
-    std::shared_ptr<Solver> cg_precond =
+    std::shared_ptr<Solver> gmres_precond =
         Solver::build()
             .with_criteria(
                 gko::stop::Iteration::build().with_max_iters(3u).on(this->exec))
             .on(this->exec)
             ->generate(wrong_sized_mtx);
 
-    auto cg_factory =
+    auto gmres_factory =
         Solver::build()
             .with_criteria(
                 gko::stop::Iteration::build().with_max_iters(3u).on(this->exec))
-            .with_generated_preconditioner(cg_precond)
+            .with_generated_preconditioner(gmres_precond)
             .on(this->exec);
 
-    ASSERT_THROW(cg_factory->generate(this->mtx), gko::DimensionMismatch);
+    ASSERT_THROW(gmres_factory->generate(this->mtx), gko::DimensionMismatch);
 }
 
 
-TYPED_TEST(DistributedCg, CanSetPreconditioner)
+TYPED_TEST(DistributedGmres, CanSetPreconditioner)
 {
     using Solver = typename TestFixture::Solver;
-    std::shared_ptr<Solver> cg_precond =
+    std::shared_ptr<Solver> gmres_precond =
         Solver::build()
             .with_criteria(
                 gko::stop::Iteration::build().with_max_iters(3u).on(this->exec))
             .on(this->exec)
             ->generate(this->mtx);
 
-    auto cg_factory =
+    auto gmres_factory =
         Solver::build()
             .with_criteria(
                 gko::stop::Iteration::build().with_max_iters(3u).on(this->exec))
             .on(this->exec);
-    auto solver = cg_factory->generate(this->mtx);
-    solver->set_preconditioner(cg_precond);
+    auto solver = gmres_factory->generate(this->mtx);
+    solver->set_preconditioner(gmres_precond);
     auto precond = solver->get_preconditioner();
 
     ASSERT_NE(precond.get(), nullptr);
-    ASSERT_EQ(precond.get(), cg_precond.get());
+    ASSERT_EQ(precond.get(), gmres_precond.get());
 }
 
 
-TYPED_TEST(DistributedCg, CanSolveIndependentLocalSystems)
+TYPED_TEST(DistributedGmres, CanSolveIndependentLocalSystems)
 {
     using Mtx = typename TestFixture::Mtx;
     using value_type = typename TestFixture::value_type;
     using Solver = typename TestFixture::Solver;
-    std::shared_ptr<Solver> cg_precond =
+    std::shared_ptr<Solver> gmres_precond =
         Solver::build()
-            .with_criteria(gko::stop::Iteration::build().with_max_iters(3u).on(
+            .with_criteria(gko::stop::Iteration::build().with_max_iters(10u).on(
                 this->sub_exec))
             .on(this->sub_exec)
             ->generate(this->mtx);
     auto b = gko::initialize<Mtx>({-1.0, 3.0, 1.0}, this->sub_exec);
     auto x = gko::initialize<Mtx>({0.0, 0.0, 0.0}, this->sub_exec);
 
-    auto cg_factory =
+    auto gmres_factory =
         Solver::build()
-            .with_criteria(gko::stop::Iteration::build().with_max_iters(3u).on(
-                this->sub_exec))
-            .on(this->sub_exec);
-    auto solver = cg_factory->generate(this->mtx);
-    solver->set_preconditioner(cg_precond);
-    auto precond = solver->get_preconditioner();
+            .with_criteria(
+                gko::stop::Iteration::build().with_max_iters(10u).on(
+                    this->sub_exec),
+                gko::stop::ResidualNormReduction<value_type>::build()
+                    .with_reduction_factor(TestFixture::reduction_factor)
+                    .on(this->sub_exec))
+            .on(this->mpi_exec);
+    auto solver = gmres_factory->generate(this->mtx);
     solver->apply(b.get(), x.get());
 
     GKO_ASSERT_MTX_NEAR(x, l({1.0, 3.0, 2.0}), r<value_type>::value);
 }
 
 
-TYPED_TEST(DistributedCg, CanSolveDistributedSystems)
+TYPED_TEST(DistributedGmres, CanSolveDistributedSystems)
 {
     using Mtx = typename TestFixture::Mtx;
     using value_type = typename TestFixture::value_type;
@@ -374,15 +377,16 @@ TYPED_TEST(DistributedCg, CanSolveDistributedSystems)
     auto x = gko::initialize_and_distribute<Mtx>(1, row_dist, {0.0, 0.0, 0.0},
                                                  this->mpi_exec);
 
-    auto cg_factory =
+    auto gmres_factory =
         Solver::build()
-            .with_criteria(gko::stop::Iteration::build().with_max_iters(10u).on(
-                               this->sub_exec),
-                           gko::stop::ResidualNormReduction<value_type>::build()
-                               .with_reduction_factor(this->reduction_factor)
-                               .on(this->sub_exec))
+            .with_criteria(
+                gko::stop::Iteration::build().with_max_iters(10u).on(
+                    this->sub_exec),
+                gko::stop::ResidualNormReduction<value_type>::build()
+                    .with_reduction_factor(TestFixture::reduction_factor)
+                    .on(this->sub_exec))
             .on(this->mpi_exec);
-    auto solver = cg_factory->generate(dist_mtx);
+    auto solver = gmres_factory->generate(dist_mtx);
     solver->apply(b.get(), x.get());
 
     if (this->rank == 0) {

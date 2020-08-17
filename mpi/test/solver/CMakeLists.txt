@@ -1,1 +1,7 @@
+# ginkgo_create_mpi_test(distributed_bicg 2)
+ginkgo_create_mpi_test(distributed_bicgstab 2)
 ginkgo_create_mpi_test(distributed_cg 2)
+ginkgo_create_mpi_test(distributed_cgs 2)
+ginkgo_create_mpi_test(distributed_fcg 2)
+# ginkgo_create_mpi_test(distributed_gmres 2)
+ginkgo_create_mpi_test(distributed_ir 2)

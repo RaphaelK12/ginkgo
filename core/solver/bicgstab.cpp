@@ -208,6 +208,136 @@ void Bicgstab<ValueType>::apply_impl(const LinOp *alpha, const LinOp *b,
 }
 
 
+template <typename ValueType>
+void Bicgstab<ValueType>::distributed_apply_impl(const LinOp *b, LinOp *x) const
+{
+    using std::swap;
+    using Vector = matrix::Dense<ValueType>;
+
+    constexpr uint8 RelativeStoppingId{1};
+
+    auto exec = this->get_executor();
+    auto mpi_exec = as<gko::MpiExecutor>(exec.get());
+    auto sub_exec = mpi_exec->get_sub_executor();
+    auto my_rank = mpi_exec->get_my_rank();
+
+    auto one_op = initialize<Vector>({one<ValueType>()}, sub_exec);
+    auto neg_one_op = initialize<Vector>({-one<ValueType>()}, sub_exec);
+
+    auto dense_b = as<Vector>(b);
+    auto dense_x = as<Vector>(x);
+    auto r = Vector::create_with_config_of(dense_b);
+    auto z = Vector::create_with_config_of(dense_b);
+    auto y = Vector::create_with_config_of(dense_b);
+    auto v = Vector::create_with_config_of(dense_b);
+    auto s = Vector::create_with_config_of(dense_b);
+    auto t = Vector::create_with_config_of(dense_b);
+    auto p = Vector::create_with_config_of(dense_b);
+    auto rr = Vector::create_with_config_of(dense_b);
+
+    auto alpha = Vector::create(sub_exec, dim<2>{1, dense_b->get_size()[1]});
+    auto beta = Vector::create_with_config_of(alpha.get());
+    auto gamma = Vector::create_with_config_of(alpha.get());
+    auto prev_rho = Vector::create_with_config_of(alpha.get());
+    auto rho = Vector::create_with_config_of(alpha.get());
+    auto omega = Vector::create_with_config_of(alpha.get());
+
+    bool one_changed{};
+    Array<stopping_status> stop_status(alpha->get_executor(),
+                                       dense_b->get_global_size()[1]);
+
+    // TODO: replace this with automatic merged kernel generator
+    sub_exec->run(bicgstab::make_initialize(
+        dense_b, r.get(), rr.get(), y.get(), s.get(), t.get(), z.get(), v.get(),
+        p.get(), prev_rho.get(), rho.get(), alpha.get(), beta.get(),
+        gamma.get(), omega.get(), &stop_status));
+    // r = dense_b
+    // prev_rho = rho = omega = alpha = beta = gamma = 1.0
+    // rr = v = s = t = z = y = p = 0
+    // stop_status = 0x00
+
+    system_matrix_->apply(neg_one_op.get(), dense_x, one_op.get(), r.get());
+    auto stop_criterion = stop_criterion_factory_->generate(
+        system_matrix_, std::shared_ptr<const LinOp>(b, [](const LinOp *) {}),
+        x, r.get());
+    rr->copy_from(r.get());
+
+    int iter = -1;
+    while (true) {
+        ++iter;
+        this->template log<log::Logger::iteration_complete>(this, iter, r.get(),
+                                                            dense_x);
+        if (stop_criterion->update()
+                .num_iterations(iter)
+                .residual(r.get())
+                .solution(dense_x)
+                .check(RelativeStoppingId, true, &stop_status, &one_changed)) {
+            break;
+        }
+
+        rr->compute_dot(r.get(), rho.get());
+
+        sub_exec->run(bicgstab::make_step_1(
+            r.get(), p.get(), v.get(), rho.get(), prev_rho.get(), alpha.get(),
+            omega.get(), &stop_status));
+        // tmp = rho / prev_rho * alpha / omega
+        // p = r + tmp * (p - omega * v)
+
+        get_preconditioner()->apply(p.get(), y.get());
+        system_matrix_->apply(y.get(), v.get());
+        rr->compute_dot(v.get(), beta.get());
+        sub_exec->run(bicgstab::make_step_2(r.get(), s.get(), v.get(),
+                                            rho.get(), alpha.get(), beta.get(),
+                                            &stop_status));
+        // alpha = rho / beta
+        // s = r - alpha * v
+
+        ++iter;
+        auto all_converged =
+            stop_criterion->update()
+                .num_iterations(iter)
+                .residual(s.get())
+                // .solution(dense_x) // outdated at this point
+                .check(RelativeStoppingId, false, &stop_status, &one_changed);
+        if (one_changed) {
+            sub_exec->run(bicgstab::make_finalize(dense_x, y.get(), alpha.get(),
+                                                  &stop_status));
+        }
+        this->template log<log::Logger::iteration_complete>(this, iter,
+                                                            r.get());
+        if (all_converged) {
+            break;
+        }
+
+        get_preconditioner()->apply(s.get(), z.get());
+        system_matrix_->apply(z.get(), t.get());
+        s->compute_dot(t.get(), gamma.get());
+        t->compute_dot(t.get(), beta.get());
+        sub_exec->run(bicgstab::make_step_3(
+            dense_x, r.get(), s.get(), t.get(), y.get(), z.get(), alpha.get(),
+            beta.get(), gamma.get(), omega.get(), &stop_status));
+        // omega = gamma / beta
+        // x = x + alpha * y + omega * z
+        // r = s - omega * t
+        swap(prev_rho, rho);
+    }
+}  // namespace solver
+
+
+template <typename ValueType>
+void Bicgstab<ValueType>::distributed_apply_impl(const LinOp *alpha,
+                                                 const LinOp *b,
+                                                 const LinOp *beta,
+                                                 LinOp *x) const
+{
+    auto dense_x = as<matrix::Dense<ValueType>>(x);
+    auto x_clone = dense_x->clone();
+    this->apply(b, x_clone.get());
+    dense_x->scale(beta);
+    dense_x->add_scaled(alpha, x_clone.get());
+}
+
+
 #define GKO_DECLARE_BICGSTAB(_type) class Bicgstab<_type>
 GKO_INSTANTIATE_FOR_EACH_VALUE_TYPE(GKO_DECLARE_BICGSTAB);
 
