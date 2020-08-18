@@ -42,8 +42,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "hip/base/math.hip.hpp"
 #include "hip/base/types.hip.hpp"
-#include "hip/components/cooperative_groups.cuh"
-#include "hip/components/reduction.cuh"
+#include "hip/components/cooperative_groups.hip.hpp"
+#include "hip/components/reduction.hip.hpp"
 #include "hip/components/thread_ids.hip.hpp"
 
 
