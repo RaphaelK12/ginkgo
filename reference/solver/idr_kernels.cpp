@@ -240,7 +240,7 @@ void compute_omega(
         }
 
         auto thr = omega->at(0, i);
-        auto normt = t_norm->at(0, i);
+        auto normt = sqrt(real(tht->at(0, i)));  // t_norm->at(0, i);
         omega->at(0, i) /= tht->at(0, i);
         auto absrho = abs(thr / (normt * residual_norm->at(0, i)));
 
