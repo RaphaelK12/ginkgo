@@ -82,6 +82,7 @@ set(GINKGO_HIP_AMDGPU "" CACHE STRING
 option(GINKGO_JACOBI_FULL_OPTIMIZATIONS "Use all the optimizations for the CUDA Jacobi algorithm" OFF)
 option(BUILD_SHARED_LIBS "Build shared (.so, .dylib, .dll) libraries" ON)
 option(MPI_RUN_AS_ROOT "Allow MPI to run as root user, necessary within docker containers, not recommended otherwise" OFF)
+option(GINKGO_FORCE_CUDA_AWARE_MPI "Assert that the MPI library is cuda aware. This forces CUDA aware implementation, but may fail catastrophically in case the MPI implementation is not CUDA Aware" OFF)
 
 set(GINKGO_CIRCULAR_DEPS_FLAGS "-Wl,--no-undefined")
 
@@ -98,9 +99,28 @@ else()
 endif()
 
 set(GINKGO_HAVE_MPI 0)
+set(GINKGO_HAVE_CUDA_AWARE_MPI 0)
 if(GINKGO_BUILD_MPI)
   find_package(MPI REQUIRED)
   set(GINKGO_HAVE_MPI 1)
+  if(GINKGO_BUILD_CUDA AND NOT GINKGO_FORCE_CUDA_AWARE_MPI)
+      enable_language(CUDA)
+      try_run(GKO_CUDA_AWARE_RUN_STATUS GKO_CUDA_AWARE_COMPILE_STATUS
+          "${CMAKE_BINARY_DIR}" SOURCES "${CMAKE_SOURCE_DIR}/mpi/test/cuda-aware-mpi-test.cu"
+          COMPILE_DEFINITIONS ""
+          LINK_LIBRARIES MPI::MPI_C
+          RUN_OUTPUT_VARIABLE GKO_CUDA_AWARE_RUN_OUT
+          COMPILE_OUTPUT_VARIABLE GKO_CUDA_AWARE_COMPILE_OUT)
+      if( ${GKO_CUDA_AWARE_RUN_STATUS} MATCHES "FAILED_TO_RUN" )
+          message(STATUS "MPI does not support CUDA, disabling CUDA-Aware features, everything will be staged through the host.")
+      else()
+          message(STATUS "MPI supports CUDA, enabling CUDA-Aware features")
+          set(GINKGO_HAVE_CUDA_AWARE_MPI 1)
+      endif()
+  endif()
+  if(GINKGO_FORCE_CUDA_AWARE_MPI)
+      set(GINKGO_HAVE_CUDA_AWARE_MPI 1)
+  endif()
 endif()
 
 if(GINKGO_BUILD_TESTS AND (GINKGO_BUILD_CUDA OR GINKGO_BUILD_OMP OR GINKGO_BUILD_HIP))
