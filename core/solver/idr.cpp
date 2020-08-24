@@ -106,6 +106,9 @@ void Idr<ValueType>::apply_impl(const LinOp *b, LinOp *x) const
     const auto problem_size = system_matrix_->get_size()[0];
     const auto nrhs = dense_b->get_size()[1];
 
+    auto subspace_vectors = matrix::Dense<ValueType>::create(
+        exec, gko::dim<2>{subspace_dim_, problem_size});
+
     auto residual = Vector::create_with_config_of(dense_b);
     auto v = Vector::create_with_config_of(dense_b);
     auto t = Vector::create_with_config_of(dense_b);
@@ -132,7 +135,8 @@ void Idr<ValueType>::apply_impl(const LinOp *b, LinOp *x) const
 
     // Initialization
     // m = identity
-    exec->run(idr::make_initialize(m.get(), &stop_status));
+    exec->run(
+        idr::make_initialize(m.get(), subspace_vectors.get(), &stop_status));
 
     // omega = 1
     exec->run(
@@ -169,7 +173,7 @@ void Idr<ValueType>::apply_impl(const LinOp *b, LinOp *x) const
             break;
         }
 
-        subspace_vectors_->apply(residual.get(), f.get());
+        subspace_vectors->apply(residual.get(), f.get());
         // f = P^H * residual
 
         for (size_type k = 0; k < subspace_dim_; k++) {
@@ -195,7 +199,7 @@ void Idr<ValueType>::apply_impl(const LinOp *b, LinOp *x) const
             system_matrix_->apply(u_k.get(), g_k.get());
             // g_k = Au_k
 
-            exec->run(idr::make_step_3(k, subspace_vectors_.get(), g.get(),
+            exec->run(idr::make_step_3(k, subspace_vectors.get(), g.get(),
                                        u.get(), m.get(), f.get(),
                                        residual.get(), dense_x, &stop_status));
             // for i = 1 to k - 1 do

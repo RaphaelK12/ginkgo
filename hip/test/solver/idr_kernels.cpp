@@ -221,8 +221,10 @@ TEST_F(Idr, HipIdrInitializeIsEquivalentToRef)
 {
     initialize_data();
 
-    gko::kernels::reference::idr::initialize(ref, m.get(), stop_status.get());
-    gko::kernels::hip::idr::initialize(hip, d_m.get(), d_stop_status.get());
+    gko::kernels::reference::idr::initialize(ref, m.get(), p.get(),
+                                             stop_status.get());
+    gko::kernels::hip::idr::initialize(hip, d_m.get(), d_p.get(),
+                                       d_stop_status.get());
 
     GKO_ASSERT_MTX_NEAR(m, d_m, 1e-14)
 }

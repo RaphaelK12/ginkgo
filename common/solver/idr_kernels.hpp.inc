@@ -50,6 +50,39 @@ __global__ __launch_bounds__(default_block_size) void initialize_kernel(
 }
 
 
+template <size_type block_size, typename ValueType>
+__global__
+    __launch_bounds__(block_size) void initialize_subspace_vectors_kernel(
+        size_type num_rows, size_type num_cols, ValueType *__restrict__ values,
+        size_type stride)
+{
+    const auto tidx = thread::get_thread_id_flat();
+
+    __shared__ UninitializedArray<ValueType, block_size> reduction_helper_array;
+    ValueType *__restrict__ reduction_helper = reduction_helper_array;
+
+    for (size_type row = 1; row < num_rows; row++) {
+        for (size_type i = 0; i < row; i++) {
+            auto dot = zero<ValueType>();
+            for (size_type j = tidx; j < num_cols; j += block_size) {
+                dot += values[row * stride + j] * conj(values[i * stride + j]);
+            }
+
+            reduction_helper[tidx] = dot;
+
+            reduce(
+                group::this_thread_block(), reduction_helper,
+                [](const ValueType &a, const ValueType &b) { return a + b; });
+
+            dot = reduction_helper[0];
+            for (size_type j = tidx; j < num_cols; j += block_size) {
+                values[row * stride + j] -= dot * values[i * stride + j];
+            }
+        }
+    }
+}
+
+
 template <typename ValueType>
 __global__
     __launch_bounds__(default_block_size) void solve_lower_triangular_kernel(

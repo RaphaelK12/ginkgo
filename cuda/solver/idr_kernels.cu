@@ -33,6 +33,9 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "core/solver/idr_kernels.hpp"
 
 
+#include <random>
+
+
 #include <ginkgo/core/base/exception_helpers.hpp>
 #include <ginkgo/core/base/math.hpp>
 
@@ -62,6 +65,37 @@ constexpr int default_block_size = 512;
 
 
 namespace {
+
+
+template <typename ValueType>
+void initialize_m(matrix::Dense<ValueType> *m,
+                  Array<stopping_status> *stop_status)
+{
+    const auto subspace_dim = m->get_size()[0];
+    const auto nrhs = m->get_size()[1] / subspace_dim;
+    const auto m_stride = m->get_stride();
+
+    const auto grid_dim = ceildiv(m_stride * subspace_dim, default_block_size);
+    initialize_kernel<<<grid_dim, default_block_size>>>(
+        subspace_dim, nrhs, as_cuda_type(m->get_values()), m_stride,
+        as_cuda_type(stop_status->get_data()));
+}
+
+
+template <typename ValueType>
+void initialize_subspace_vectors(matrix::Dense<ValueType> *subspace_vectors)
+{
+    auto subspace_vectors_data = matrix_data<ValueType>(
+        subspace_vectors->get_size(), std::normal_distribution<>(0.0, 1.0),
+        std::ranlux48(15));
+    subspace_vectors->read(subspace_vectors_data);
+
+    initialize_subspace_vectors_kernel<<<1, default_block_size>>>(
+        subspace_vectors->get_size()[0], subspace_vectors->get_size()[1],
+        as_cuda_type(subspace_vectors->get_values()),
+        subspace_vectors->get_stride());
+    )
+}
 
 
 template <typename ValueType>
@@ -149,16 +183,11 @@ void update_x_r_and_f(size_type k, const matrix::Dense<ValueType> *m,
 template <typename ValueType>
 void initialize(std::shared_ptr<const CudaExecutor> exec,
                 matrix::Dense<ValueType> *m,
+                matrix::Dense<ValueType> *subspace_vectors,
                 Array<stopping_status> *stop_status)
 {
-    const auto subspace_dim = m->get_size()[0];
-    const auto nrhs = m->get_size()[1] / subspace_dim;
-    const auto m_stride = m->get_stride();
-
-    const auto grid_dim = ceildiv(m_stride * subspace_dim, default_block_size);
-    initialize_kernel<<<grid_dim, default_block_size>>>(
-        subspace_dim, nrhs, as_cuda_type(m->get_values()), m_stride,
-        as_cuda_type(stop_status->get_data()));
+    initialize_m(m, stop_status);
+    initialize_subspace_vectors(subspace_vectors);
 }
 
 GKO_INSTANTIATE_FOR_EACH_VALUE_TYPE(GKO_DECLARE_IDR_INITIALIZE_KERNEL);

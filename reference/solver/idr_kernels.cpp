@@ -34,6 +34,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
 #include <algorithm>
+#include <random>
 
 
 #include <ginkgo/core/base/array.hpp>
@@ -101,6 +102,7 @@ void update_g_and_u(size_type k, const matrix::Dense<ValueType> *p,
 template <typename ValueType>
 void initialize(std::shared_ptr<const ReferenceExecutor> exec,
                 matrix::Dense<ValueType> *m,
+                matrix::Dense<ValueType> *subspace_vectors,
                 Array<stopping_status> *stop_status)
 {
     const auto nrhs = m->get_size()[1] / m->get_size()[0];
@@ -112,6 +114,25 @@ void initialize(std::shared_ptr<const ReferenceExecutor> exec,
         for (size_type col = 0; col < m->get_size()[1]; col++) {
             m->at(row, col) =
                 (row == col / nrhs) ? one<ValueType>() : zero<ValueType>();
+        }
+    }
+
+    auto subspace_vectors_data = matrix_data<ValueType>(
+        subspace_vectors->get_size(), std::normal_distribution<>(0.0, 1.0),
+        std::ranlux48(15));
+    subspace_vectors->read(subspace_vectors_data);
+
+    for (size_type row = 1; row < subspace_vectors->get_size()[0]; row++) {
+        for (size_type i = 0; i < row; i++) {
+            auto dot = zero<ValueType>();
+            for (size_type j = 0; j < subspace_vectors->get_size()[1]; j++) {
+                dot += subspace_vectors->at(row, j) *
+                       conj(subspace_vectors->at(i, j));
+            }
+            for (size_type j = 0; j < subspace_vectors->get_size()[1]; j++) {
+                subspace_vectors->at(row, j) -=
+                    dot * subspace_vectors->at(i, j);
+            }
         }
     }
 }
