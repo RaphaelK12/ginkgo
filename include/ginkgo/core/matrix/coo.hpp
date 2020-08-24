@@ -417,9 +417,8 @@ protected:
                                      nnz_per_row.get_data() + total_num_rows,
                                      nnz_per_row.get_data());
         }
-        auto num_nnz_per_row =
-            nnz_per_row.distribute(exec->get_master(), row_set);
-        auto row_start = row_ptr_clone.distribute(exec->get_master(), row_set);
+        auto num_nnz_per_row = nnz_per_row.distribute(exec, row_set);
+        auto row_start = row_ptr_clone.distribute(exec, row_set);
         auto index_set = gko::IndexSet<itype>{size_type(total_num_nnz)};
         for (auto i = 0; i < num_rows; ++i) {
             index_set.add_subset(row_start.get_const_data()[i] -

@@ -39,13 +39,13 @@ namespace gko {
 
 std::shared_ptr<Executor> MpiExecutor::get_master() noexcept
 {
-    return this->shared_from_this();
+    return this->sub_executor_->get_master();
 }
 
 
 std::shared_ptr<const Executor> MpiExecutor::get_master() const noexcept
 {
-    return this->shared_from_this();
+    return this->sub_executor_->get_master();
 }
 
 std::shared_ptr<Executor> MpiExecutor::get_sub_executor() noexcept

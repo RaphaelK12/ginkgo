@@ -163,7 +163,6 @@ Array<ValueType> Array<ValueType>::distribute(
                      global_num_elems_subset_array.get_data(),
                      recv_count_array.get_const_data(), displ.get_const_data(),
                      root_rank);
-
     auto tag = gko::Array<itype>{sub_exec->get_master(),
                                  static_cast<size_type>(num_subsets)};
     for (auto t = 0; t < num_subsets; ++t) {
@@ -176,7 +175,8 @@ Array<ValueType> Array<ValueType>::distribute(
                      recv_count_array.get_const_data(), displ.get_const_data(),
                      root_rank);
 
-    auto distributed_array = Array<ValueType>{exec, index_set.get_num_elems()};
+    auto dist_array_master =
+        Array<ValueType>{exec->get_master(), index_set.get_num_elems()};
     auto req_array =
         mpi_exec->create_requests_array(num_ranks * total_num_subsets);
     auto idx = 0;
@@ -202,18 +202,22 @@ Array<ValueType> Array<ValueType>::distribute(
         auto n_elems = num_elems_in_subset.get_data()[in_subset];
         auto start_idx = start_idx_array.get_data()[in_subset];
         if (my_rank != root_rank) {
-            mpi_exec->recv(&distributed_array.get_data()[offset], n_elems,
+            mpi_exec->recv(&dist_array_master.get_data()[offset], n_elems,
                            root_rank, tag.get_data()[in_subset]);
         } else {
-            distributed_array.get_executor()->get_mem_space()->copy_from(
-                sub_exec->get_mem_space().get(), n_elems,
-                &(this->get_const_data()[start_idx]),
-                &distributed_array.get_data()[offset]);
+            dist_array_master.get_executor()->copy(
+                n_elems, &(this->get_const_data()[start_idx]),
+                &dist_array_master.get_data()[offset]);
         }
         offset += n_elems;
     }
-
-    return std::move(distributed_array);
+    if (exec->get_master() == exec->get_sub_executor()) {
+        return std::move(dist_array_master);
+    } else {
+        auto dist_array = Array<ValueType>{exec, index_set.get_num_elems()};
+        dist_array = dist_array_master;
+        return std::move(dist_array);
+    }
 }
 
 
@@ -317,7 +321,8 @@ Array<ValueType> Array<ValueType>::gather_on_root(
                      root_rank);
     Array<ValueType> gathered_array;
     if (my_rank == root_rank) {
-        gathered_array = Array<ValueType>{exec, size_type(gathered_num_rows)};
+        gathered_array =
+            Array<ValueType>{exec->get_master(), size_type(gathered_num_rows)};
     }
     auto offset = 0;
     for (auto in_subset = 0; in_subset < num_subsets; ++in_subset) {
@@ -327,9 +332,8 @@ Array<ValueType> Array<ValueType>::gather_on_root(
             mpi_exec->send(&(this->get_const_data()[offset]), n_elems,
                            root_rank, tag.get_data()[in_subset]);
         } else {
-            gathered_array.get_executor()->get_mem_space()->copy_from(
-                sub_exec->get_mem_space().get(), n_elems,
-                &(this->get_const_data()[offset]),
+            gathered_array.get_executor()->copy(
+                n_elems, &(this->get_const_data()[offset]),
                 &gathered_array.get_data()[start_idx]);
         }
         offset += n_elems;
@@ -354,7 +358,19 @@ Array<ValueType> Array<ValueType>::gather_on_root(
         }
     }
 
-    return std::move(gathered_array);
+    Array<ValueType> gathered_array_dev;
+    if (my_rank == root_rank) {
+        if (exec->get_master() == exec->get_sub_executor()) {
+            return std::move(gathered_array);
+        } else {
+            gathered_array_dev =
+                Array<ValueType>{exec, gathered_array.get_num_elems()};
+            gathered_array_dev = gathered_array;
+            return std::move(gathered_array_dev);
+        }
+    } else {
+        return std::move(gathered_array);
+    }
 }
 
 
@@ -457,7 +473,8 @@ Array<ValueType> Array<ValueType>::gather_on_all(
                      recv_count_array.get_const_data(), displ.get_const_data(),
                      root_rank);
     Array<ValueType> gathered_array;
-    gathered_array = Array<ValueType>{exec, size_type(gathered_num_rows)};
+    gathered_array =
+        Array<ValueType>{exec->get_master(), size_type(gathered_num_rows)};
     auto offset = 0;
     for (auto in_subset = 0; in_subset < num_subsets; ++in_subset) {
         auto n_elems = num_elems_in_subset.get_data()[in_subset];
@@ -466,9 +483,8 @@ Array<ValueType> Array<ValueType>::gather_on_all(
             mpi_exec->send(&(this->get_const_data()[offset]), n_elems,
                            root_rank, tag.get_data()[in_subset]);
         } else {
-            gathered_array.get_executor()->get_mem_space()->copy_from(
-                sub_exec->get_mem_space().get(), n_elems,
-                &(this->get_const_data()[offset]),
+            gathered_array.get_executor()->copy(
+                n_elems, &(this->get_const_data()[offset]),
                 &gathered_array.get_data()[start_idx]);
         }
         offset += n_elems;
@@ -495,7 +511,15 @@ Array<ValueType> Array<ValueType>::gather_on_all(
     mpi_exec->broadcast(gathered_array.get_data(),
                         gathered_array.get_num_elems(), root_rank);
 
-    return std::move(gathered_array);
+    Array<ValueType> gathered_array_dev;
+    if (exec->get_master() == exec->get_sub_executor()) {
+        return std::move(gathered_array);
+    } else {
+        gathered_array_dev =
+            Array<ValueType>{exec, gathered_array.get_num_elems()};
+        gathered_array_dev = gathered_array;
+        return std::move(gathered_array_dev);
+    }
 }
 
 

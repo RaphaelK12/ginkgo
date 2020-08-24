@@ -982,9 +982,8 @@ protected:
                                      nnz_per_row.get_data() + total_num_rows,
                                      nnz_per_row.get_data());
         }
-        auto num_nnz_per_row =
-            nnz_per_row.distribute(exec->get_master(), row_set);
-        auto row_start = row_ptr_clone.distribute(exec->get_master(), row_set);
+        auto num_nnz_per_row = nnz_per_row.distribute(exec, row_set);
+        auto row_start = row_ptr_clone.distribute(exec, row_set);
         auto updated_row_ptrs =
             Array<itype>(exec, size_type(num_rows + 1), itype(0));
         updated_row_ptrs.set_executor(exec->get_master());
