@@ -76,14 +76,15 @@ void initialize_m(matrix::Dense<ValueType> *m,
     const auto m_stride = m->get_stride();
 
     const auto grid_dim = ceildiv(m_stride * subspace_dim, default_block_size);
-    hipLaunchKernelGGL(initialize_kernel, grid_dim, default_block_size, 0,
-                       0 subspace_dim, nrhs, as_hip_type(m->get_values()),
-                       m_stride, as_hip_type(stop_status->get_data()));
+    hipLaunchKernelGGL(HIP_KERNEL_NAME(initialize_m_kernel), grid_dim,
+                       default_block_size, 0, 0 subspace_dim, nrhs,
+                       as_hip_type(m->get_values()), m_stride,
+                       as_hip_type(stop_status->get_data()));
 }
 
 
 template <typename ValueType>
-void initialize_subspace_vectors(matrix::Dense<ValueType> *subspace_vectors)
+void orthonormalize_subspace_vectors(matrix::Dense<ValueType> *subspace_vectors)
 {
     auto subspace_vectors_data = matrix_data<ValueType>(
         subspace_vectors->get_size(), std::normal_distribution<>(0.0, 1.0),
@@ -91,8 +92,10 @@ void initialize_subspace_vectors(matrix::Dense<ValueType> *subspace_vectors)
     subspace_vectors->read(subspace_vectors_data);
 
     hipLaunchKernelGGL(
-        initialize_subspace_vectors_kernel, 1, default_block_size, 0, 0,
-        subspace_vectors->get_size()[0], subspace_vectors->get_size()[1],
+        HIP_KERNEL_NAME(
+            orthonormalize_subspace_vectors_kernel<default_block_size>),
+        1, default_block_size, 0, 0, subspace_vectors->get_size()[0],
+        subspace_vectors->get_size()[1],
         as_hip_type(subspace_vectors->get_values()),
         subspace_vectors->get_stride());
     )

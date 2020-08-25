@@ -62,11 +62,16 @@ namespace {
 template <typename ValueType>
 void solve_lower_triangular(const matrix::Dense<ValueType> *m,
                             const matrix::Dense<ValueType> *f,
-                            matrix::Dense<ValueType> *c)
+                            matrix::Dense<ValueType> *c,
+                            const Array<stopping_status> *stop_status)
 {
     const auto nrhs = m->get_size()[1] / m->get_size()[0];
 #pragma omp parallel for
     for (size_type i = 0; i < f->get_size()[1]; i++) {
+        if (stop_status->get_const_data()[i].has_stopped()) {
+            continue;
+        }
+
         for (size_type row = 0; row < m->get_size()[0]; row++) {
             auto temp = f->at(row, i);
             for (size_type col = 0; col < row; col++) {
@@ -81,11 +86,16 @@ void solve_lower_triangular(const matrix::Dense<ValueType> *m,
 template <typename ValueType>
 void update_g_and_u(size_type k, const matrix::Dense<ValueType> *p,
                     const matrix::Dense<ValueType> *m,
-                    matrix::Dense<ValueType> *g, matrix::Dense<ValueType> *u)
+                    matrix::Dense<ValueType> *g, matrix::Dense<ValueType> *u,
+                    const Array<stopping_status> *stop_status)
 {
     const auto nrhs = m->get_size()[1] / m->get_size()[0];
 #pragma omp parallel for
     for (size_type i = 0; i < nrhs; i++) {
+        if (stop_status->get_const_data()[i].has_stopped()) {
+            continue;
+        }
+
         for (size_type j = 0; j < k; j++) {
             auto alpha = zero<ValueType>();
             for (size_type ind = 0; ind < p->get_size()[1]; ind++) {
@@ -114,6 +124,7 @@ void initialize(std::shared_ptr<const OmpExecutor> exec,
 #pragma omp declare reduction(add:ValueType : omp_out = omp_out + omp_in)
     const auto nrhs = m->get_size()[1] / m->get_size()[0];
 
+    // Initialize M
 #pragma omp parallel for
     for (size_type i = 0; i < nrhs; i++) {
         stop_status->get_data()[i].reset();
@@ -127,24 +138,35 @@ void initialize(std::shared_ptr<const OmpExecutor> exec,
         }
     }
 
-    auto subspace_vectors_data = matrix_data<ValueType>(
-        subspace_vectors->get_size(), std::normal_distribution<>(0.0, 1.0),
-        std::ranlux48(15));
-    subspace_vectors->read(subspace_vectors_data);
-
-    for (size_type row = 1; row < subspace_vectors->get_size()[0]; row++) {
+    // Orthonormalize P
+    const auto num_rows = subspace_vectors->get_size()[0];
+    const auto num_cols = subspace_vectors->get_size()[1];
+    for (size_type row = 0; row < num_rows; row++) {
         for (size_type i = 0; i < row; i++) {
             auto dot = zero<ValueType>();
 #pragma omp parallel for reduction(add : dot)
-            for (size_type j = 0; j < subspace_vectors->get_size()[1]; j++) {
+            for (size_type j = 0; j < num_cols; j++) {
                 dot += subspace_vectors->at(row, j) *
                        conj(subspace_vectors->at(i, j));
             }
 #pragma omp parallel for
-            for (size_type j = 0; j < subspace_vectors->get_size()[1]; j++) {
+            for (size_type j = 0; j < num_cols; j++) {
                 subspace_vectors->at(row, j) -=
                     dot * subspace_vectors->at(i, j);
             }
+        }
+
+        auto norm = zero<remove_complex<ValueType>>();
+#pragma omp parallel for reduction(+ : norm)
+        for (size_type j = 0; j < num_cols; j++) {
+            norm += squared_norm(subspace_vectors->at(row, j));
+        }
+
+        norm = sqrt(norm);
+
+#pragma omp parallel for
+        for (size_type j = 0; j < num_cols; j++) {
+            subspace_vectors->at(row, j) /= norm;
         }
     }
 }
@@ -164,16 +186,14 @@ void step_1(std::shared_ptr<const OmpExecutor> exec, const size_type k,
     const auto m_size = m->get_size();
     const auto nrhs = f->get_size()[1];
 
+    // Compute c = M \ f
+    solve_lower_triangular(m, f, c, stop_status);
+
     for (size_type i = 0; i < nrhs; i++) {
-        if (stop_status->get_const_data()[0].has_stopped()) {
+        if (stop_status->get_const_data()[i].has_stopped()) {
             continue;
         }
-    }
 
-    // Compute c = M \ f
-    solve_lower_triangular(m, f, c);
-
-    for (size_type i = 0; i < nrhs; i++) {
         // v = residual - c_k * g_k - ... - c_s * g_s
 #pragma omp parallel for
         for (size_type row = 0; row < v->get_size()[0]; row++) {
@@ -198,7 +218,7 @@ void step_2(std::shared_ptr<const OmpExecutor> exec, const size_type k,
 {
     const auto nrhs = omega->get_size()[1];
     for (size_type i = 0; i < nrhs; i++) {
-        if (stop_status->get_const_data()[0].has_stopped()) {
+        if (stop_status->get_const_data()[i].has_stopped()) {
             continue;
         }
 
@@ -226,15 +246,13 @@ void step_3(std::shared_ptr<const OmpExecutor> exec, const size_type k,
 {
     const auto nrhs = x->get_size()[1];
 
+    update_g_and_u(k, p, m, g, u, stop_status);
+
     for (size_type i = 0; i < nrhs; i++) {
-        if (stop_status->get_const_data()[0].has_stopped()) {
+        if (stop_status->get_const_data()[i].has_stopped()) {
             continue;
         }
-    }
 
-    update_g_and_u(k, p, m, g, u);
-
-    for (size_type i = 0; i < nrhs; i++) {
 #pragma omp parallel for
         for (size_type j = k; j < m->get_size()[0]; j++) {
             auto temp = zero<ValueType>();
@@ -274,7 +292,7 @@ void compute_omega(
 {
 #pragma omp parallel for
     for (size_type i = 0; i < omega->get_size()[1]; i++) {
-        if (stop_status->get_const_data()[0].has_stopped()) {
+        if (stop_status->get_const_data()[i].has_stopped()) {
             continue;
         }
 

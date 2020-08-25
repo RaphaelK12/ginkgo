@@ -76,24 +76,20 @@ void initialize_m(matrix::Dense<ValueType> *m,
     const auto m_stride = m->get_stride();
 
     const auto grid_dim = ceildiv(m_stride * subspace_dim, default_block_size);
-    initialize_kernel<<<grid_dim, default_block_size>>>(
+    initialize_m_kernel<<<grid_dim, default_block_size>>>(
         subspace_dim, nrhs, as_cuda_type(m->get_values()), m_stride,
         as_cuda_type(stop_status->get_data()));
 }
 
 
 template <typename ValueType>
-void initialize_subspace_vectors(matrix::Dense<ValueType> *subspace_vectors)
+void orthonormalize_subspace_vectors(matrix::Dense<ValueType> *subspace_vectors)
 {
-    auto subspace_vectors_data = matrix_data<ValueType>(
-        subspace_vectors->get_size(), std::normal_distribution<>(0.0, 1.0),
-        std::ranlux48(15));
-    subspace_vectors->read(subspace_vectors_data);
-
-    initialize_subspace_vectors_kernel<<<1, default_block_size>>>(
-        subspace_vectors->get_size()[0], subspace_vectors->get_size()[1],
-        as_cuda_type(subspace_vectors->get_values()),
-        subspace_vectors->get_stride());
+    orthonormalize_subspace_vectors_kernel<default_block_size>
+        <<<1, default_block_size>>>(
+            subspace_vectors->get_size()[0], subspace_vectors->get_size()[1],
+            as_cuda_type(subspace_vectors->get_values()),
+            subspace_vectors->get_stride());
     )
 }
 
@@ -187,7 +183,7 @@ void initialize(std::shared_ptr<const CudaExecutor> exec,
                 Array<stopping_status> *stop_status)
 {
     initialize_m(m, stop_status);
-    initialize_subspace_vectors(subspace_vectors);
+    orthonormalize_subspace_vectors(subspace_vectors);
 }
 
 GKO_INSTANTIATE_FOR_EACH_VALUE_TYPE(GKO_DECLARE_IDR_INITIALIZE_KERNEL);
