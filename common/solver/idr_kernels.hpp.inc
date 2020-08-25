@@ -238,7 +238,8 @@ __global__ __launch_bounds__(block_size) void update_g_and_u_kernel(
     }
 
     for (size_type j = tidx; j < size; j += block_size) {
-        g_values[j * g_stride + k * nrhs + rhs] = g_k_values[j * g_k_stride];
+        g_values[j * g_stride + k * nrhs + rhs] =
+            g_k_values[j * g_k_stride + rhs];
     }
 }
 
