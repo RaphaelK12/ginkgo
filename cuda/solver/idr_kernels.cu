@@ -171,6 +171,8 @@ void update_x_r_and_f(size_type k, const matrix::Dense<ValueType> *m,
         as_cuda_type(r->get_values()), r->get_stride(),
         as_cuda_type(x->get_values()), x->get_stride(),
         as_cuda_type(stop_status->get_const_data()));
+    set_f_zeros<<<ceildiv(nrhs, config::warp_size), config::warp_size>>>(
+        k, nrhs, as_hip_type(f->get_values()), f->get_stride());
 }
 
 

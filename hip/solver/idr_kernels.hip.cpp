@@ -180,6 +180,10 @@ void update_x_r_and_f(size_type k, const matrix::Dense<ValueType> *m,
                        as_hip_type(r->get_values()), r->get_stride(),
                        as_hip_type(x->get_values()), x->get_stride(),
                        as_hip_type(stop_status->get_const_data()));
+    hipLaunchKernelGGL(HIP_KERNEL_NAME(set_f_zeros),
+                       ceildiv(nrhs, config::warp_size), config::warp_size, 0,
+                       0, k, nrhs, as_hip_type(f->get_values()),
+                       f->get_stride());
 }
 
 

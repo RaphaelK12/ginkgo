@@ -313,9 +313,18 @@ __global__ __launch_bounds__(default_block_size) void update_x_r_and_f_kernel(
             f_values[row * f_stride + col] -=
                 beta * m_values[row * m_stride + k * nrhs + col];
         }
-        if (k == row && row + 1 < subspace_dim) {
-            f_values[row * f_stride + col] = zero<ValueType>();
-        }
+    }
+}
+
+
+template <typename ValueType>
+__global__ __launch_bounds__(config::warp_size) void set_f_zeros(
+    size_type k, size_type nrhs, ValueType *__restrict__ f_values,
+    size_type f_stride)
+{
+    const auto tidx = thread::get_thread_id_flat();
+    if (tidx < nrhs) {
+        f_values[k * f_stride + k * nrhs + tidx] = zero<ValueType>();
     }
 }
 
