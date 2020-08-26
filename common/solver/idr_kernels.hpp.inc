@@ -286,44 +286,6 @@ __global__ __launch_bounds__(block_size) void update_g_kernel(
 }
 
 
-template <size_type block_size, typename ValueType>
-__global__ __launch_bounds__(block_size) void update_m_kernel(
-    size_type k, size_type size, size_type subspace_dim, size_type nrhs,
-    const ValueType *__restrict__ p_values, size_type p_stride,
-    const ValueType *__restrict__ g_values, size_type g_stride,
-    ValueType *__restrict__ m_values, size_type m_stride,
-    const stopping_status *__restrict__ stop_status)
-{
-    const auto tidx = threadIdx.x;
-    const auto row = blockIdx.x + k;
-    const auto col = blockIdx.y;
-
-    if (stop_status[col].has_stopped()) {
-        return;
-    }
-
-    __shared__ UninitializedArray<ValueType, block_size> reduction_helper_array;
-    ValueType *__restrict__ reduction_helper = reduction_helper_array;
-
-    ValueType local_res = zero<ValueType>();
-    if (row < subspace_dim && col < nrhs) {
-        for (size_type i = tidx; i < size; i += block_size) {
-            local_res += p_values[row * p_stride + i] *
-                         g_values[i * g_stride + k * nrhs + col];
-        }
-    }
-    reduction_helper[tidx] = local_res;
-    __syncthreads();
-    reduce(group::this_thread_block(), reduction_helper,
-           [](const ValueType &a, const ValueType &b) { return a + b; });
-    __syncthreads();
-
-    if (tidx == 0) {
-        m_values[row * m_stride + k * nrhs + col] = reduction_helper[0];
-    }
-}
-
-
 template <typename ValueType>
 __global__ __launch_bounds__(default_block_size) void update_x_r_and_f_kernel(
     size_type k, size_type size, size_type subspace_dim, size_type nrhs,
