@@ -160,7 +160,8 @@ void update_g_and_u(std::shared_ptr<const CudaExecutor> exec, size_type k,
                 as_cuda_type(stop_status->get_const_data()));
     }
     update_g_kernel<default_block_size>
-        <<<ceildiv(size * g_k->get_stride()), default_block_size>>>(
+        <<<ceildiv(size * g_k->get_stride(), default_block_size),
+           default_block_size>>>(
             k, size, nrhs, as_cuda_type(g_k->get_const_values()),
             g_k->get_stride(), as_cuda_type(g->get_values()), g->get_stride(),
             as_cuda_type(stop_status->get_const_data()));

@@ -196,7 +196,7 @@ void update_m(std::shared_ptr<const HipExecutor> exec, size_type k,
                                as_hip_type(stop_status->get_const_data()));
         } else {
             hipblas::dot(exec->get_hipblas_handle(), size, p_i, 1,
-                         g_k->get_values(), g_k->get_stride(), m_i);
+                         g_k->get_const_values(), g_k->get_stride(), m_i);
         }
     }
 }
