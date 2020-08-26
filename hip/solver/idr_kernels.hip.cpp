@@ -191,11 +191,11 @@ void update_m(std::shared_ptr<const HipExecutor> exec, size_type k,
             components::fill_array(exec, m_i, nrhs, zero<ValueType>());
             hipLaunchKernelGGL(multidot_kernel, grid_dim, block_dim, 0, 0, i,
                                size, nrhs, as_hip_type(p_i),
-                               as_hip_type(g_k->get_values()),
+                               as_hip_type(g_k->get_const_values()),
                                g_k->get_stride(), as_hip_type(m_i),
                                as_hip_type(stop_status->get_const_data()));
         } else {
-            hipblas::dot(exec->get_hipblas_handle(), size, p_i, p_stride,
+            hipblas::dot(exec->get_hipblas_handle(), size, p_i, 1,
                          g_k->get_values(), g_k->get_stride(), m_i);
         }
     }

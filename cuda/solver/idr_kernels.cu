@@ -145,7 +145,7 @@ void update_g_and_u(std::shared_ptr<const CudaExecutor> exec, size_type k,
                 as_cuda_type(alpha->get_values()),
                 as_cuda_type(stop_status->get_const_data()));
         } else {
-            cublas::dot(exec->get_cublas_handle(), size, p_i, p_stride,
+            cublas::dot(exec->get_cublas_handle(), size, p_i, 1,
                         g_k->get_values(), g_k->get_stride(),
                         alpha->get_values());
         }
@@ -190,10 +190,10 @@ void update_m(std::shared_ptr<const CudaExecutor> exec, size_type k,
             components::fill_array(exec, m_i, nrhs, zero<ValueType>());
             multidot_kernel<<<grid_dim, block_dim>>>(
                 i, size, nrhs, as_cuda_type(p_i),
-                as_cuda_type(g_k->get_values()), g_k->get_stride(),
+                as_cuda_type(g_k->get_const_values()), g_k->get_stride(),
                 as_cuda_type(m_i), as_cuda_type(stop_status->get_const_data()));
         } else {
-            cublas::dot(exec->get_cublas_handle(), size, p_i, p_stride,
+            cublas::dot(exec->get_cublas_handle(), size, p_i, 1,
                         g_k->get_values(), g_k->get_stride(), m_i);
         }
     }
