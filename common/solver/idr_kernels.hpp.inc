@@ -215,7 +215,7 @@ __global__ __launch_bounds__(default_dot_size) void multidot_kernel(
     ValueType *__restrict__ reduction_helper = reduction_helper_array;
 
     ValueType local_res = zero<ValueType>();
-    if (rhs < nrhs && !stop_status[col_idx].has_stopped()) {
+    if (rhs < nrhs && !stop_status[rhs].has_stopped()) {
         for (size_type i = start_row + tidy; i < end_row;
              i += default_dot_dim) {
             const auto g_idx = i * g_k_stride + rhs;
@@ -231,17 +231,15 @@ __global__ __launch_bounds__(default_dot_size) void multidot_kernel(
         reduce(tile_block, local_res,
                [](const ValueType &a, const ValueType &b) { return a + b; });
     const auto new_rhs = blockIdx.x * default_dot_dim + tidy;
-    if (tidx == 0 && new_rhs < num_cols &&
-        !stop_status[new_rhs].has_stopped()) {
-        const auto alpha_idx = k * stride_hessenberg + new_rhs;
-        atomic_add(alpha + alpha_idx, sum);
+    if (tidx == 0 && new_rhs < nrhs && !stop_status[new_rhs].has_stopped()) {
+        atomic_add(alpha + new_rhs, sum);
     }
 }
 
 
 template <size_type block_size, typename ValueType>
-__global__ __launch_bounds__(block_size) void update_g_and_u_kernel(
-    size_type i, size_type size, size_type nrhs,
+__global__ __launch_bounds__(block_size) void update_g_k_and_u_kernel(
+    size_type k, size_type i, size_type size, size_type nrhs,
     const ValueType *__restrict__ alpha, const ValueType *__restrict__ m_values,
     size_type m_stride, const ValueType *__restrict__ g_values,
     size_type g_stride, ValueType *__restrict__ g_k_values,
@@ -368,7 +366,7 @@ __global__ __launch_bounds__(config::warp_size) void set_f_zeros(
 {
     const auto tidx = thread::get_thread_id_flat();
     if (tidx < nrhs) {
-        f_values[k * f_stride + k * nrhs + tidx] = zero<ValueType>();
+        f_values[k * f_stride + tidx] = zero<ValueType>();
     }
 }
 
