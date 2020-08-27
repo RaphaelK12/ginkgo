@@ -65,8 +65,7 @@ protected:
         exec = gko::ReferenceExecutor::create();
         host = gko::ReferenceExecutor::create();
         GKO_ASSERT_NO_MPI_ERRORS(MPI_Comm_rank(MPI_COMM_WORLD, &rank));
-        mpi_exec =
-            gko::MpiExecutor::create(gko::CudaExecutor::create(rank, host));
+        mpi_exec = gko::MpiExecutor::create(gko::CudaExecutor::create(0, host));
         mpi_exec2 = gko::MpiExecutor::create(host);
         sub_exec = mpi_exec->get_sub_executor();
         rank = mpi_exec->get_my_rank();
@@ -723,7 +722,7 @@ TYPED_TEST(DistributedDense, AdvancedAppliesToDenseForLocalRhs)
                                          comp_data),
             2);
         x = gko::matrix::Dense<value_type>::create(
-            this->sub_exec->get_master(), res_size,
+            this->sub_exec, res_size,
             gko::Array<value_type>::view(this->sub_exec->get_master(), 4,
                                          x_data),
             2);
@@ -746,7 +745,7 @@ TYPED_TEST(DistributedDense, AdvancedAppliesToDenseForLocalRhs)
                                          comp_data),
             2);
         x = gko::matrix::Dense<value_type>::create(
-            this->sub_exec->get_master(), res_size,
+            this->sub_exec, res_size,
             gko::Array<value_type>::view(this->sub_exec->get_master(), 6,
                                          x_data),
             2);
@@ -805,7 +804,7 @@ TYPED_TEST(DistributedDense, AdvancedAppliesToDenseForDistributedRhs)
         local_size = gko::dim<2>(2, 2);
         res_size = gko::dim<2>(2, 2);
         comp_res = gko::matrix::Dense<value_type>::create(
-            this->mpi_exec->get_sub_executor(), res_size,
+            this->mpi_exec->get_sub_executor()->get_master(), res_size,
             gko::Array<value_type>::view(this->sub_exec->get_master(), 4,
                                          comp_data),
             2);
@@ -828,7 +827,7 @@ TYPED_TEST(DistributedDense, AdvancedAppliesToDenseForDistributedRhs)
         local_size = gko::dim<2>(3, 2);
         res_size = gko::dim<2>(3, 2);
         comp_res = gko::matrix::Dense<value_type>::create(
-            this->mpi_exec->get_sub_executor(), res_size,
+            this->mpi_exec->get_sub_executor()->get_master(), res_size,
             gko::Array<value_type>::view(this->sub_exec->get_master(), 6,
                                          comp_data),
             2);
@@ -849,9 +848,11 @@ TYPED_TEST(DistributedDense, AdvancedAppliesToDenseForDistributedRhs)
         gko::Array<value_type>::view(this->sub_exec->get_master(), 10, data),
         2);
     mat->apply(alpha.get(), dist_rhs.get(), beta.get(), x.get());
+    auto x_h = gko::matrix::Dense<value_type>::create(this->mpi_exec2);
+    x_h->copy_from(x.get());
     EXPECT_EQ(x->get_global_size(), comp_res->get_global_size());
     EXPECT_EQ(x->get_size(), comp_res->get_size());
-    this->assert_equal_mtxs(x.get(), comp_res.get());
+    this->assert_equal_mtxs(x_h.get(), comp_res.get());
     if (this->rank == 0) {
         delete data;
     }
@@ -891,7 +892,7 @@ TYPED_TEST(DistributedDense, ScalesDense)
         local_size = gko::dim<2>(2, 2);
         res_size = gko::dim<2>(2, 2);
         comp_res = gko::matrix::Dense<value_type>::create(
-            this->mpi_exec->get_sub_executor(), res_size,
+            this->mpi_exec->get_sub_executor()->get_master(), res_size,
             gko::Array<value_type>::view(this->sub_exec->get_master(), 4,
                                          comp_data),
             2);
@@ -905,7 +906,7 @@ TYPED_TEST(DistributedDense, ScalesDense)
         local_size = gko::dim<2>(3, 2);
         res_size = gko::dim<2>(3, 2);
         comp_res = gko::matrix::Dense<value_type>::create(
-            this->mpi_exec->get_sub_executor(), res_size,
+            this->mpi_exec->get_sub_executor()->get_master(), res_size,
             gko::Array<value_type>::view(this->sub_exec->get_master(), 6,
                                          comp_data),
             2);
@@ -916,9 +917,11 @@ TYPED_TEST(DistributedDense, ScalesDense)
         gko::Array<value_type>::view(this->sub_exec->get_master(), 10, data),
         2);
     mat->scale(alpha.get());
+    auto mat_h = gko::matrix::Dense<value_type>::create(this->mpi_exec2);
+    mat_h->copy_from(mat.get());
     EXPECT_EQ(mat->get_size(), comp_res->get_size());
     EXPECT_EQ(mat->get_global_size(), global_size);
-    this->assert_equal_mtxs(mat.get(), comp_res.get());
+    this->assert_equal_mtxs(mat_h.get(), comp_res.get());
     if (this->rank == 0) {
         delete data;
     }
@@ -957,11 +960,15 @@ TYPED_TEST(DistributedDense, AddsScaled)
         local_size = gko::dim<2>(2, 2);
         res_size = gko::dim<2>(2, 2);
         comp_res = gko::matrix::Dense<value_type>::create(
-            this->mpi_exec->get_sub_executor(), res_size,
-            gko::Array<value_type>::view(this->sub_exec, 4, comp_data), 2);
+            this->mpi_exec->get_sub_executor()->get_master(), res_size,
+            gko::Array<value_type>::view(this->sub_exec->get_master(), 4,
+                                         comp_data),
+            2);
         b = gko::matrix::Dense<value_type>::create(
             this->mpi_exec->get_sub_executor(), res_size,
-            gko::Array<value_type>::view(this->sub_exec, 4, b_data), 2);
+            gko::Array<value_type>::view(this->sub_exec->get_master(), 4,
+                                         b_data),
+            2);
     } else {
         // clang-format off
         b_data = new value_type[6]{ 1.0, -2.0,
@@ -975,19 +982,26 @@ TYPED_TEST(DistributedDense, AddsScaled)
         local_size = gko::dim<2>(3, 2);
         res_size = gko::dim<2>(3, 2);
         comp_res = gko::matrix::Dense<value_type>::create(
-            this->mpi_exec->get_sub_executor(), res_size,
-            gko::Array<value_type>::view(this->sub_exec, 6, comp_data), 2);
+            this->mpi_exec->get_sub_executor()->get_master(), res_size,
+            gko::Array<value_type>::view(this->sub_exec->get_master(), 6,
+                                         comp_data),
+            2);
         b = gko::matrix::Dense<value_type>::create(
             this->mpi_exec->get_sub_executor(), res_size,
-            gko::Array<value_type>::view(this->sub_exec, 6, b_data), 2);
+            gko::Array<value_type>::view(this->sub_exec->get_master(), 6,
+                                         b_data),
+            2);
     }
     auto global_size = gko::dim<2>(5, 2);
     auto mat = gko::matrix::Dense<value_type>::create_and_distribute(
         this->mpi_exec, global_size, index_set,
-        gko::Array<value_type>::view(this->sub_exec, 10, data), 2);
+        gko::Array<value_type>::view(this->sub_exec->get_master(), 10, data),
+        2);
     mat->add_scaled(alpha.get(), b.get());
+    auto mat_h = gko::matrix::Dense<value_type>::create(this->mpi_exec2);
+    mat_h->copy_from(mat.get());
     EXPECT_EQ(mat->get_size(), comp_res->get_size());
-    this->assert_equal_mtxs(mat.get(), comp_res.get());
+    this->assert_equal_mtxs(mat_h.get(), comp_res.get());
     if (this->rank == 0) {
         delete data;
     }
@@ -1008,8 +1022,9 @@ TYPED_TEST(DistributedDense, CanComputeDot)
                                      this->mpi_exec->get_sub_executor());
     auto res2 = gko::initialize<Mtx>({I<value_type>{0.0, 0.0}},
                                      this->mpi_exec->get_sub_executor());
-    auto comp_res = gko::initialize<Mtx>({I<value_type>{30.0, 20.0}},
-                                         this->mpi_exec->get_sub_executor());
+    auto comp_res =
+        gko::initialize<Mtx>({I<value_type>{30.0, 20.0}},
+                             this->mpi_exec->get_sub_executor()->get_master());
     value_type *vec1_data;
     value_type *vec2_data;
     if (this->rank == 0) {
@@ -1035,16 +1050,24 @@ TYPED_TEST(DistributedDense, CanComputeDot)
     vec2_size = gko::dim<2>(3, 2);
     vec1 = gko::matrix::Dense<value_type>::distributed_create(
         this->mpi_exec, vec1_size,
-        gko::Array<value_type>::view(this->sub_exec, 6, vec1_data), 2);
+        gko::Array<value_type>::view(this->sub_exec->get_master(), 6,
+                                     vec1_data),
+        2);
     vec2 = gko::matrix::Dense<value_type>::distributed_create(
         this->mpi_exec, vec2_size,
-        gko::Array<value_type>::view(this->sub_exec, 6, vec2_data), 2);
+        gko::Array<value_type>::view(this->sub_exec->get_master(), 6,
+                                     vec2_data),
+        2);
     vec1->compute_dot(vec2.get(), res1.get());
     vec2->compute_dot(vec1.get(), res2.get());
+    auto res1_h = gko::matrix::Dense<value_type>::create(this->mpi_exec2);
+    res1_h->copy_from(res1.get());
+    auto res2_h = gko::matrix::Dense<value_type>::create(this->mpi_exec2);
+    res2_h->copy_from(res2.get());
     EXPECT_EQ(res1->get_size(), comp_res->get_size());
     EXPECT_EQ(res2->get_size(), comp_res->get_size());
-    this->assert_equal_mtxs(comp_res.get(), res1.get());
-    this->assert_equal_mtxs(comp_res.get(), res2.get());
+    this->assert_equal_mtxs(comp_res.get(), res1_h.get());
+    this->assert_equal_mtxs(comp_res.get(), res2_h.get());
     delete vec1_data;
     delete vec2_data;
 }
@@ -1082,11 +1105,14 @@ TYPED_TEST(DistributedDense, CanCompute2Norm)
     }
     vec1 = gko::matrix::Dense<value_type>::distributed_create(
         this->mpi_exec, vec1_size,
-        gko::Array<value_type>::view(this->sub_exec, nelems, vec1_data), 2);
+        gko::Array<value_type>::view(this->sub_exec->get_master(), nelems,
+                                     vec1_data),
+        2);
     vec1->compute_norm2(res1.get());
-
-    EXPECT_EQ(res1->at(0, 0), T_nc(std::sqrt(68.25)));
-    EXPECT_EQ(res1->at(0, 1), T_nc(std::sqrt(21.25)));
+    auto res1_h = NormVector::create(this->mpi_exec2);
+    res1_h->copy_from(res1.get());
+    EXPECT_EQ(res1_h->at(0, 0), T_nc(std::sqrt(68.25)));
+    EXPECT_EQ(res1_h->at(0, 1), T_nc(std::sqrt(21.25)));
     delete vec1_data;
 }
 

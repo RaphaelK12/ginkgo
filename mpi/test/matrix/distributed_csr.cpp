@@ -66,7 +66,7 @@ protected:
         char **argv;
         int argc = 0;
         exec = gko::ReferenceExecutor::create();
-        mpi_exec = gko::MpiExecutor::create(gko::ReferenceExecutor::create());
+        mpi_exec = gko::MpiExecutor::create(exec);
         sub_exec = mpi_exec->get_sub_executor();
         rank = mpi_exec->get_my_rank();
         ASSERT_GT(mpi_exec->get_num_ranks(), 1);
@@ -162,7 +162,7 @@ protected:
     }
 
     std::shared_ptr<gko::MpiExecutor> mpi_exec;
-    std::shared_ptr<const gko::Executor> exec;
+    std::shared_ptr<gko::Executor> exec;
     std::shared_ptr<const gko::Executor> sub_exec;
     std::unique_ptr<Mtx> mtx;
     int rank;

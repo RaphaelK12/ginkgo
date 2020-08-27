@@ -1527,7 +1527,7 @@ protected:
 
     void destroy();
 
-    MpiExecutor(std::shared_ptr<gko::Executor> sub_executor, int num_args,
+    MpiExecutor(std::shared_ptr<Executor> sub_executor, int num_args,
                 char **args)
         : num_ranks_(1),
           num_args_(num_args),
