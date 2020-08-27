@@ -384,14 +384,14 @@ protected:
         itype total_num_rows = global_size[0];
         itype total_num_nnz = row_idxs.get_num_elems();
         mpi_exec->broadcast(&total_num_nnz, 1, root_rank);
-        auto row_ptrs = Array<itype>{sub_exec->get_master()};
-        row_idxs.set_executor(sub_exec->get_master());
+        auto row_ptrs = Array<itype>{exec->get_master()};
+        auto row_idxs_cpy = Array<itype>{exec->get_master()};
+        row_idxs_cpy = row_idxs;
         if (my_rank == root_rank) {
-            row_ptrs.resize_and_reset(total_num_rows + 1);
-            std::fill(row_ptrs.get_data(),
-                      row_ptrs.get_data() + total_num_rows + 1, 0);
-            std::for_each(row_idxs.get_const_data(),
-                          row_idxs.get_const_data() + total_num_nnz,
+            row_ptrs = Array<itype>(exec->get_master(),
+                                    size_type(total_num_rows + 1), itype(0));
+            std::for_each(row_idxs_cpy.get_const_data(),
+                          row_idxs_cpy.get_const_data() + total_num_nnz,
                           [&](size_type v) {
                               if (v + 1 < total_num_rows + 1) {
                                   ++row_ptrs.get_data()[v + 1];
@@ -401,7 +401,6 @@ protected:
                              row_ptrs.get_data() + total_num_rows + 1,
                              row_ptrs.get_data());
         }
-        row_idxs.set_executor(sub_exec);
 
         // TODO: Can possibly be moved to the exec instead of master.
         auto nnz_per_row = Array<itype>{sub_exec->get_master()};
@@ -418,8 +417,12 @@ protected:
                                      nnz_per_row.get_data());
         }
         auto num_nnz_per_row = nnz_per_row.distribute(exec, row_set);
+        num_nnz_per_row.set_executor(exec->get_master());
         auto row_start = row_ptr_clone.distribute(exec, row_set);
-        auto index_set = gko::IndexSet<itype>{size_type(total_num_nnz)};
+        row_start.set_executor(exec->get_master());
+        auto max_index_size = row_set.get_largest_element_in_set();
+        auto index_set =
+            gko::IndexSet<itype>{(max_index_size + 1) * global_size[1]};
         for (auto i = 0; i < num_rows; ++i) {
             index_set.add_subset(row_start.get_const_data()[i] -
                                      num_nnz_per_row.get_const_data()[i],

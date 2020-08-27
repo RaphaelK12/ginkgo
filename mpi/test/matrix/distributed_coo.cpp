@@ -70,24 +70,6 @@ protected:
         sub_exec = mpi_exec->get_sub_executor();
         rank = mpi_exec->get_my_rank();
         ASSERT_GT(mpi_exec->get_num_ranks(), 1);
-
-        mtx = gko::matrix::Coo<value_type, index_type>::distributed_create(
-            mpi_exec, gko::dim<2>{2, 3}, 4);
-        value_type *v = mtx->get_values();
-        index_type *c = mtx->get_col_idxs();
-        index_type *r = mtx->get_row_idxs();
-        r[0] = 0;
-        r[1] = 0;
-        r[2] = 0;
-        r[3] = 1;
-        c[0] = 0;
-        c[1] = 1;
-        c[2] = 2;
-        c[3] = 1;
-        v[0] = 1.0;
-        v[1] = 3.0;
-        v[2] = 2.0;
-        v[3] = 5.0;
     }
 
     void TearDown()
@@ -105,27 +87,6 @@ protected:
         ASSERT_EQ(m->get_const_values(), nullptr);
         ASSERT_EQ(m->get_const_col_idxs(), nullptr);
         ASSERT_EQ(m->get_const_row_idxs(), nullptr);
-    }
-
-    void assert_equal_to_original_mtx(const Mtx *m)
-    {
-        auto v = m->get_const_values();
-        auto c = m->get_const_col_idxs();
-        auto r = m->get_const_row_idxs();
-        ASSERT_EQ(m->get_size(), gko::dim<2>(2, 3));
-        ASSERT_EQ(m->get_num_stored_elements(), 4);
-        EXPECT_EQ(r[0], 0);
-        EXPECT_EQ(r[1], 0);
-        EXPECT_EQ(r[2], 0);
-        EXPECT_EQ(r[3], 1);
-        EXPECT_EQ(c[0], 0);
-        EXPECT_EQ(c[1], 1);
-        EXPECT_EQ(c[2], 2);
-        EXPECT_EQ(c[3], 1);
-        EXPECT_EQ(v[0], value_type{1.0});
-        EXPECT_EQ(v[1], value_type{3.0});
-        EXPECT_EQ(v[2], value_type{2.0});
-        EXPECT_EQ(v[3], value_type{5.0});
     }
 
     static void assert_equal_mtxs(
@@ -157,7 +118,6 @@ protected:
     std::shared_ptr<gko::MpiExecutor> mpi_exec;
     std::shared_ptr<const gko::Executor> exec;
     std::shared_ptr<const gko::Executor> sub_exec;
-    std::unique_ptr<Mtx> mtx;
     int rank;
 };
 
@@ -183,14 +143,6 @@ TYPED_TEST(DistributedCoo, CanBeEmpty)
     using Mtx = typename TestFixture::Mtx;
     auto empty = Mtx::distributed_create(this->mpi_exec);
     this->assert_empty(empty.get());
-}
-
-
-TYPED_TEST(DistributedCoo, KnowsItsSize)
-{
-    ASSERT_EQ(this->mtx->get_size(), gko::dim<2>(2, 3));
-    ASSERT_EQ(this->mtx->get_global_size(), gko::dim<2>(2, 3));
-    ASSERT_EQ(this->mtx->get_num_stored_elements(), 4);
 }
 
 

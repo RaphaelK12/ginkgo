@@ -66,28 +66,14 @@ protected:
         char **argv;
         int argc = 0;
         exec = gko::ReferenceExecutor::create();
-        mpi_exec = gko::MpiExecutor::create(gko::ReferenceExecutor::create());
+        host = gko::ReferenceExecutor::create();
+        GKO_ASSERT_NO_MPI_ERRORS(MPI_Comm_rank(MPI_COMM_WORLD, &rank));
+        mpi_exec = gko::MpiExecutor::create(gko::CudaExecutor::create(0, host));
+        mpi_exec2 = gko::MpiExecutor::create(host);
         sub_exec = mpi_exec->get_sub_executor();
+        sub_exec2 = mpi_exec2->get_sub_executor();
         rank = mpi_exec->get_my_rank();
         ASSERT_GT(mpi_exec->get_num_ranks(), 1);
-
-        mtx = gko::matrix::Coo<value_type, index_type>::distributed_create(
-            mpi_exec, gko::dim<2>{2, 3}, 4);
-        value_type *v = mtx->get_values();
-        index_type *c = mtx->get_col_idxs();
-        index_type *r = mtx->get_row_idxs();
-        r[0] = 0;
-        r[1] = 0;
-        r[2] = 0;
-        r[3] = 1;
-        c[0] = 0;
-        c[1] = 1;
-        c[2] = 2;
-        c[3] = 1;
-        v[0] = 1.0;
-        v[1] = 3.0;
-        v[2] = 2.0;
-        v[3] = 5.0;
     }
 
     void TearDown()
@@ -96,36 +82,6 @@ protected:
             // ensure that previous calls finished and didn't throw an error
             ASSERT_NO_THROW(mpi_exec->synchronize());
         }
-    }
-
-    void assert_empty(const Mtx *m)
-    {
-        ASSERT_EQ(m->get_size(), gko::dim<2>(0, 0));
-        ASSERT_EQ(m->get_num_stored_elements(), 0);
-        ASSERT_EQ(m->get_const_values(), nullptr);
-        ASSERT_EQ(m->get_const_col_idxs(), nullptr);
-        ASSERT_EQ(m->get_const_row_idxs(), nullptr);
-    }
-
-    void assert_equal_to_original_mtx(const Mtx *m)
-    {
-        auto v = m->get_const_values();
-        auto c = m->get_const_col_idxs();
-        auto r = m->get_const_row_idxs();
-        ASSERT_EQ(m->get_size(), gko::dim<2>(2, 3));
-        ASSERT_EQ(m->get_num_stored_elements(), 4);
-        EXPECT_EQ(r[0], 0);
-        EXPECT_EQ(r[1], 0);
-        EXPECT_EQ(r[2], 0);
-        EXPECT_EQ(r[3], 1);
-        EXPECT_EQ(c[0], 0);
-        EXPECT_EQ(c[1], 1);
-        EXPECT_EQ(c[2], 2);
-        EXPECT_EQ(c[3], 1);
-        EXPECT_EQ(v[0], value_type{1.0});
-        EXPECT_EQ(v[1], value_type{3.0});
-        EXPECT_EQ(v[2], value_type{2.0});
-        EXPECT_EQ(v[3], value_type{5.0});
     }
 
     static void assert_equal_mtxs(
@@ -155,43 +111,17 @@ protected:
     }
 
     std::shared_ptr<gko::MpiExecutor> mpi_exec;
+    std::shared_ptr<gko::MpiExecutor> mpi_exec2;
     std::shared_ptr<const gko::Executor> exec;
+    std::shared_ptr<gko::Executor> host;
     std::shared_ptr<const gko::Executor> sub_exec;
-    std::unique_ptr<Mtx> mtx;
+    std::shared_ptr<const gko::Executor> sub_exec2;
     int rank;
 };
 
 // TODO: Some weird error with double and complex types for COO apply
 TYPED_TEST_CASE(DistributedCoo, gko::test::DebugValueIndexType);
 // TYPED_TEST_CASE(DistributedCoo, gko::test::ValueIndexTypes);
-
-
-TYPED_TEST(DistributedCoo, DoesNotThrowForMpiExecutor)
-{
-    using Mtx = typename TestFixture::Mtx;
-    ASSERT_NO_THROW(Mtx::distributed_create(this->mpi_exec));
-}
-
-TYPED_TEST(DistributedCoo, ThrowsForOtherExecutors)
-{
-    using Mtx = typename TestFixture::Mtx;
-    ASSERT_THROW(Mtx::distributed_create(this->exec), gko::NotSupported);
-}
-
-TYPED_TEST(DistributedCoo, CanBeEmpty)
-{
-    using Mtx = typename TestFixture::Mtx;
-    auto empty = Mtx::distributed_create(this->mpi_exec);
-    this->assert_empty(empty.get());
-}
-
-
-TYPED_TEST(DistributedCoo, KnowsItsSize)
-{
-    ASSERT_EQ(this->mtx->get_size(), gko::dim<2>(2, 3));
-    ASSERT_EQ(this->mtx->get_global_size(), gko::dim<2>(2, 3));
-    ASSERT_EQ(this->mtx->get_num_stored_elements(), 4);
-}
 
 
 TYPED_TEST(DistributedCoo, CanBeConstructedFromExistingExecutorData)
@@ -214,15 +144,22 @@ TYPED_TEST(DistributedCoo, CanBeConstructedFromExistingExecutorData)
 
     auto mtx = gko::matrix::Coo<value_type, index_type>::distributed_create(
         this->mpi_exec, gko::dim<2>{3, 2},
-        gko::Array<value_type>::view(this->sub_exec, 4, values),
-        gko::Array<index_type>::view(this->sub_exec, 4, col_idxs),
-        gko::Array<index_type>::view(this->sub_exec, 4, row_idxs));
+        gko::Array<value_type>::view(this->sub_exec->get_master(), 4, values),
+        gko::Array<index_type>::view(this->sub_exec->get_master(), 4, col_idxs),
+        gko::Array<index_type>::view(this->sub_exec->get_master(), 4,
+                                     row_idxs));
+    auto mtx_h = Mtx::create(this->mpi_exec2);
+    mtx_h->copy_from(mtx.get());
+    auto mtx2 = gko::matrix::Coo<value_type, index_type>::distributed_create(
+        this->mpi_exec2, gko::dim<2>{3, 2},
+        gko::Array<value_type>::view(this->sub_exec->get_master(), 4, values),
+        gko::Array<index_type>::view(this->sub_exec->get_master(), 4, col_idxs),
+        gko::Array<index_type>::view(this->sub_exec->get_master(), 4,
+                                     row_idxs));
 
     ASSERT_EQ(mtx->get_global_size(), gko::dim<2>(3, 2));
     ASSERT_EQ(mtx->get_size(), gko::dim<2>(3, 2));
-    ASSERT_EQ(mtx->get_const_values(), values);
-    ASSERT_EQ(mtx->get_const_col_idxs(), col_idxs);
-    ASSERT_EQ(mtx->get_const_row_idxs(), row_idxs);
+    this->assert_equal_mtxs(mtx_h.get(), mtx2.get());
     delete values, col_idxs, row_idxs;
 }
 
@@ -273,11 +210,14 @@ TYPED_TEST(DistributedCoo, CanDistributeData)
          *  0.0  2.0  0.0  0.0  1.5 ] rank 0
          */
         // clang-format on
-        l_mat = Mtx::create(
-            this->sub_exec, local_size,
-            gko::Array<value_type>::view(this->sub_exec, 5, local_values),
-            gko::Array<index_type>::view(this->sub_exec, 5, local_col_idxs),
-            gko::Array<index_type>::view(this->sub_exec, 5, local_row_idxs));
+        l_mat =
+            Mtx::create(this->sub_exec->get_master(), local_size,
+                        gko::Array<value_type>::view(
+                            this->sub_exec->get_master(), 5, local_values),
+                        gko::Array<index_type>::view(
+                            this->sub_exec->get_master(), 5, local_col_idxs),
+                        gko::Array<index_type>::view(
+                            this->sub_exec->get_master(), 5, local_row_idxs));
     } else {
         local_values = new value_type[11]{-2.0, 4.0, 6.0,  0.5, -2.0, 3.0,
                                           5.0,  1.0, -3.0, 4.0, 7.0};
@@ -293,21 +233,28 @@ TYPED_TEST(DistributedCoo, CanDistributeData)
          * -3.0  4.0  0.0  0.0  7.0 }
          */
         // clang-format on
-        l_mat = Mtx::create(
-            this->sub_exec, local_size,
-            gko::Array<value_type>::view(this->sub_exec, 11, local_values),
-            gko::Array<index_type>::view(this->sub_exec, 11, local_col_idxs),
-            gko::Array<index_type>::view(this->sub_exec, 11, local_row_idxs));
+        l_mat =
+            Mtx::create(this->sub_exec->get_master(), local_size,
+                        gko::Array<value_type>::view(
+                            this->sub_exec->get_master(), 11, local_values),
+                        gko::Array<index_type>::view(
+                            this->sub_exec->get_master(), 11, local_col_idxs),
+                        gko::Array<index_type>::view(
+                            this->sub_exec->get_master(), 11, local_row_idxs));
     }
     global_size = gko::dim<2>(5, 5);
     mat = Mtx::create_and_distribute(
         this->mpi_exec, global_size, row_dist,
-        gko::Array<value_type>::view(this->sub_exec, 16, values),
-        gko::Array<index_type>::view(this->sub_exec, 16, col_idxs),
-        gko::Array<index_type>::view(this->sub_exec, 16, row_idxs));
+        gko::Array<value_type>::view(this->sub_exec->get_master(), 16, values),
+        gko::Array<index_type>::view(this->sub_exec->get_master(), 16,
+                                     col_idxs),
+        gko::Array<index_type>::view(this->sub_exec->get_master(), 16,
+                                     row_idxs));
 
     ASSERT_EQ(mat->get_executor(), this->mpi_exec);
-    this->assert_equal_mtxs(mat.get(), l_mat.get());
+    auto mat_h = Mtx::create(this->mpi_exec2);
+    mat_h->copy_from(mat.get());
+    this->assert_equal_mtxs(mat_h.get(), l_mat.get());
     if (this->rank == 0) {
         delete values, row_idxs, col_idxs;
     }
@@ -363,11 +310,14 @@ TYPED_TEST(DistributedCoo, CanDistributeDataNonContiguously)
          *  0.5 -2.0  3.0  5.0  1.0 } rank 0
          */
         // clang-format on
-        l_mat = Mtx::create(
-            this->sub_exec, local_size,
-            gko::Array<value_type>::view(this->sub_exec, 8, local_values),
-            gko::Array<index_type>::view(this->sub_exec, 8, local_col_idxs),
-            gko::Array<index_type>::view(this->sub_exec, 8, local_row_idxs));
+        l_mat =
+            Mtx::create(this->sub_exec->get_master(), local_size,
+                        gko::Array<value_type>::view(
+                            this->sub_exec->get_master(), 8, local_values),
+                        gko::Array<index_type>::view(
+                            this->sub_exec->get_master(), 8, local_col_idxs),
+                        gko::Array<index_type>::view(
+                            this->sub_exec->get_master(), 8, local_row_idxs));
     } else {
         local_values =
             new value_type[8]{2.0, 1.5, -2.0, 4.0, 6.0, -3.0, 4.0, 7.0};
@@ -384,21 +334,28 @@ TYPED_TEST(DistributedCoo, CanDistributeDataNonContiguously)
           * -3.0  4.0  0.0  0.0  7.0 } rank 1
          */
         // clang-format on
-        l_mat = Mtx::create(
-            this->sub_exec, local_size,
-            gko::Array<value_type>::view(this->sub_exec, 8, local_values),
-            gko::Array<index_type>::view(this->sub_exec, 8, local_col_idxs),
-            gko::Array<index_type>::view(this->sub_exec, 8, local_row_idxs));
+        l_mat =
+            Mtx::create(this->sub_exec->get_master(), local_size,
+                        gko::Array<value_type>::view(
+                            this->sub_exec->get_master(), 8, local_values),
+                        gko::Array<index_type>::view(
+                            this->sub_exec->get_master(), 8, local_col_idxs),
+                        gko::Array<index_type>::view(
+                            this->sub_exec->get_master(), 8, local_row_idxs));
     }
     global_size = gko::dim<2>(5, 5);
     mat = Mtx::create_and_distribute(
         this->mpi_exec, global_size, row_dist,
-        gko::Array<value_type>::view(this->sub_exec, 16, values),
-        gko::Array<index_type>::view(this->sub_exec, 16, col_idxs),
-        gko::Array<index_type>::view(this->sub_exec, 16, row_idxs));
+        gko::Array<value_type>::view(this->sub_exec->get_master(), 16, values),
+        gko::Array<index_type>::view(this->sub_exec->get_master(), 16,
+                                     col_idxs),
+        gko::Array<index_type>::view(this->sub_exec->get_master(), 16,
+                                     row_idxs));
 
     ASSERT_EQ(mat->get_executor(), this->mpi_exec);
-    this->assert_equal_mtxs(mat.get(), l_mat.get());
+    auto mat_h = Mtx::create(this->mpi_exec2);
+    mat_h->copy_from(mat.get());
+    this->assert_equal_mtxs(mat_h.get(), l_mat.get());
     if (this->rank == 0) {
         delete values, row_idxs, col_idxs;
     }
@@ -431,8 +388,9 @@ TYPED_TEST(DistributedCoo, AppliesToDense)
     value_type *vec_data;
     vec_data = new value_type[5]{-3.0, 3.0, -5.0, 5.0, 1.0};
     dvec = DenseVec::create(
-        this->sub_exec, gko::dim<2>(5, 1),
-        gko::Array<value_type>::view(this->sub_exec, 5, vec_data), 1);
+        this->sub_exec->get_master(), gko::dim<2>(5, 1),
+        gko::Array<value_type>::view(this->sub_exec->get_master(), 5, vec_data),
+        1);
     if (this->rank == 0) {
         // clang-format off
         /*  1.0  0.0  1.0  0.0 -1.0 ]
@@ -454,18 +412,22 @@ TYPED_TEST(DistributedCoo, AppliesToDense)
         row_dist.add_subset(0, 2);
         num_rows = 2;
         local_size = gko::dim<2>(num_rows, 5);
-        expected = DenseVec::create(this->sub_exec, gko::dim<2>(num_rows, 1));
+        expected = DenseVec::create(this->sub_exec->get_master(),
+                                    gko::dim<2>(num_rows, 1));
         // clang-format off
         /*
          *  1.0  0.0  1.0  0.0 -1.0 ]
          *  0.0  2.0  0.0  0.0  1.5 ] rank 0
          */
         // clang-format on
-        l_mat = Mtx::create(
-            this->sub_exec, local_size,
-            gko::Array<value_type>::view(this->sub_exec, 5, local_values),
-            gko::Array<index_type>::view(this->sub_exec, 5, local_col_idxs),
-            gko::Array<index_type>::view(this->sub_exec, 5, local_row_idxs));
+        l_mat =
+            Mtx::create(this->sub_exec->get_master(), local_size,
+                        gko::Array<value_type>::view(
+                            this->sub_exec->get_master(), 5, local_values),
+                        gko::Array<index_type>::view(
+                            this->sub_exec->get_master(), 5, local_col_idxs),
+                        gko::Array<index_type>::view(
+                            this->sub_exec->get_master(), 5, local_row_idxs));
     } else {
         local_values = new value_type[11]{-2.0, 4.0, 6.0,  0.5, -2.0, 3.0,
                                           5.0,  1.0, -3.0, 4.0, 7.0};
@@ -474,7 +436,8 @@ TYPED_TEST(DistributedCoo, AppliesToDense)
         row_dist.add_subset(2, 5);
         num_rows = 3;
         local_size = gko::dim<2>(num_rows, 5);
-        expected = DenseVec::create(this->sub_exec, gko::dim<2>(num_rows, 1));
+        expected = DenseVec::create(this->sub_exec->get_master(),
+                                    gko::dim<2>(num_rows, 1));
         // clang-format off
         /*
          * -2.0  0.0  4.0  0.0  6.0 }
@@ -482,26 +445,34 @@ TYPED_TEST(DistributedCoo, AppliesToDense)
          * -3.0  4.0  0.0  0.0  7.0 }
          */
         // clang-format on
-        l_mat = Mtx::create(
-            this->sub_exec, local_size,
-            gko::Array<value_type>::view(this->sub_exec, 11, local_values),
-            gko::Array<index_type>::view(this->sub_exec, 11, local_col_idxs),
-            gko::Array<index_type>::view(this->sub_exec, 11, local_row_idxs));
+        l_mat =
+            Mtx::create(this->sub_exec->get_master(), local_size,
+                        gko::Array<value_type>::view(
+                            this->sub_exec->get_master(), 11, local_values),
+                        gko::Array<index_type>::view(
+                            this->sub_exec->get_master(), 11, local_col_idxs),
+                        gko::Array<index_type>::view(
+                            this->sub_exec->get_master(), 11, local_row_idxs));
     }
     global_size = gko::dim<2>(5, 5);
     mat = Mtx::create_and_distribute(
         this->mpi_exec, global_size, row_dist,
-        gko::Array<value_type>::view(this->sub_exec, 16, values),
-        gko::Array<index_type>::view(this->sub_exec, 16, col_idxs),
-        gko::Array<index_type>::view(this->sub_exec, 16, row_idxs));
+        gko::Array<value_type>::view(this->sub_exec->get_master(), 16, values),
+        gko::Array<index_type>::view(this->sub_exec->get_master(), 16,
+                                     col_idxs),
+        gko::Array<index_type>::view(this->sub_exec->get_master(), 16,
+                                     row_idxs));
     std::shared_ptr<DenseVec> res =
         DenseVec::create(this->sub_exec, gko::dim<2>(num_rows, 1));
     l_mat->apply(dvec.get(), expected.get());
     mat->apply(dvec.get(), res.get());
 
-    ASSERT_EQ(mat->get_executor(), this->mpi_exec);
-    this->assert_equal_mtxs(mat.get(), l_mat.get());
-    this->assert_equal_vecs(res.get(), expected.get());
+    auto mat_h = Mtx::create(this->mpi_exec2);
+    mat_h->copy_from(mat.get());
+    this->assert_equal_mtxs(mat_h.get(), l_mat.get());
+    auto res_h = DenseVec::create(this->sub_exec->get_master());
+    res_h->copy_from(res.get());
+    this->assert_equal_vecs(res_h.get(), expected.get());
     if (this->rank == 0) {
         delete values, row_idxs, col_idxs;
     }

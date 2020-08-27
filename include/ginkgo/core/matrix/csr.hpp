@@ -983,10 +983,11 @@ protected:
                                      nnz_per_row.get_data());
         }
         auto num_nnz_per_row = nnz_per_row.distribute(exec, row_set);
+        num_nnz_per_row.set_executor(exec->get_master());
         auto row_start = row_ptr_clone.distribute(exec, row_set);
+        row_start.set_executor(exec->get_master());
         auto updated_row_ptrs =
-            Array<itype>(exec, size_type(num_rows + 1), itype(0));
-        updated_row_ptrs.set_executor(exec->get_master());
+            Array<itype>(exec->get_master(), size_type(num_rows + 1), itype(0));
         std::partial_sum(num_nnz_per_row.get_const_data(),
                          num_nnz_per_row.get_const_data() + num_rows,
                          updated_row_ptrs.get_data() + 1);
