@@ -138,7 +138,7 @@ TYPED_TEST(DistributedBicgstab, CanBeCopied)
 {
     using Mtx = typename TestFixture::Mtx;
     using Solver = typename TestFixture::Solver;
-    auto copy = this->bicgstab_factory->generate(Mtx::create(this->exec));
+    auto copy = this->bicgstab_factory->generate(Mtx::create(this->mpi_exec));
 
     copy->copy_from(this->solver.get());
 
@@ -153,7 +153,7 @@ TYPED_TEST(DistributedBicgstab, CanBeMoved)
 {
     using Mtx = typename TestFixture::Mtx;
     using Solver = typename TestFixture::Solver;
-    auto copy = this->bicgstab_factory->generate(Mtx::create(this->exec));
+    auto copy = this->bicgstab_factory->generate(Mtx::create(this->mpi_exec));
 
     copy->copy_from(std::move(this->solver));
 
@@ -201,19 +201,19 @@ TYPED_TEST(DistributedBicgstab, CanSetPreconditionerGenerator)
     using value_type = typename TestFixture::value_type;
     auto bicgstab_factory =
         Solver::build()
-            .with_criteria(
-                gko::stop::Iteration::build().with_max_iters(3u).on(this->exec),
-                gko::stop::ResidualNormReduction<value_type>::build()
-                    .with_reduction_factor(
-                        gko::remove_complex<value_type>(1e-6))
-                    .on(this->exec))
+            .with_criteria(gko::stop::Iteration::build().with_max_iters(5u).on(
+                               this->mpi_exec),
+                           gko::stop::ResidualNormReduction<value_type>::build()
+                               .with_reduction_factor(
+                                   gko::remove_complex<value_type>(1e-6))
+                               .on(this->mpi_exec))
             .with_preconditioner(
                 Solver::build()
                     .with_criteria(
-                        gko::stop::Iteration::build().with_max_iters(3u).on(
-                            this->exec))
-                    .on(this->exec))
-            .on(this->exec);
+                        gko::stop::Iteration::build().with_max_iters(5u).on(
+                            this->mpi_exec))
+                    .on(this->mpi_exec))
+            .on(this->mpi_exec);
     auto solver = bicgstab_factory->generate(this->mtx);
     auto precond = dynamic_cast<const gko::solver::Bicgstab<value_type> *>(
         static_cast<gko::solver::Bicgstab<value_type> *>(solver.get())
@@ -231,17 +231,17 @@ TYPED_TEST(DistributedBicgstab, CanSetPreconditionerInFactory)
     using Solver = typename TestFixture::Solver;
     std::shared_ptr<Solver> bicgstab_precond =
         Solver::build()
-            .with_criteria(
-                gko::stop::Iteration::build().with_max_iters(3u).on(this->exec))
-            .on(this->exec)
+            .with_criteria(gko::stop::Iteration::build().with_max_iters(5u).on(
+                this->mpi_exec))
+            .on(this->mpi_exec)
             ->generate(this->mtx);
 
     auto bicgstab_factory =
         Solver::build()
-            .with_criteria(
-                gko::stop::Iteration::build().with_max_iters(3u).on(this->exec))
+            .with_criteria(gko::stop::Iteration::build().with_max_iters(5u).on(
+                this->mpi_exec))
             .with_generated_preconditioner(bicgstab_precond)
-            .on(this->exec);
+            .on(this->mpi_exec);
     auto solver = bicgstab_factory->generate(this->mtx);
     auto precond = solver->get_preconditioner();
 
@@ -254,15 +254,15 @@ TYPED_TEST(DistributedBicgstab, CanSetCriteriaAgain)
 {
     using Solver = typename TestFixture::Solver;
     std::shared_ptr<gko::stop::CriterionFactory> init_crit =
-        gko::stop::Iteration::build().with_max_iters(3u).on(this->exec);
+        gko::stop::Iteration::build().with_max_iters(5u).on(this->mpi_exec);
     auto bicgstab_factory =
-        Solver::build().with_criteria(init_crit).on(this->exec);
+        Solver::build().with_criteria(init_crit).on(this->mpi_exec);
 
     ASSERT_EQ((bicgstab_factory->get_parameters().criteria).back(), init_crit);
 
     auto solver = bicgstab_factory->generate(this->mtx);
     std::shared_ptr<gko::stop::CriterionFactory> new_crit =
-        gko::stop::Iteration::build().with_max_iters(5u).on(this->exec);
+        gko::stop::Iteration::build().with_max_iters(5u).on(this->mpi_exec);
 
     solver->set_stop_criterion_factory(new_crit);
     auto new_crit_fac = solver->get_stop_criterion_factory();
@@ -280,20 +280,20 @@ TYPED_TEST(DistributedBicgstab, ThrowsOnWrongPreconditionerInFactory)
     using Mtx = typename TestFixture::Mtx;
     using Solver = typename TestFixture::Solver;
     std::shared_ptr<Mtx> wrong_sized_mtx =
-        Mtx::create(this->exec, gko::dim<2>{1, 3});
+        Mtx::create(this->mpi_exec, gko::dim<2>{1, 3});
     std::shared_ptr<Solver> bicgstab_precond =
         Solver::build()
-            .with_criteria(
-                gko::stop::Iteration::build().with_max_iters(3u).on(this->exec))
-            .on(this->exec)
+            .with_criteria(gko::stop::Iteration::build().with_max_iters(5u).on(
+                this->mpi_exec))
+            .on(this->mpi_exec)
             ->generate(wrong_sized_mtx);
 
     auto bicgstab_factory =
         Solver::build()
-            .with_criteria(
-                gko::stop::Iteration::build().with_max_iters(3u).on(this->exec))
+            .with_criteria(gko::stop::Iteration::build().with_max_iters(5u).on(
+                this->mpi_exec))
             .with_generated_preconditioner(bicgstab_precond)
-            .on(this->exec);
+            .on(this->mpi_exec);
 
     ASSERT_THROW(bicgstab_factory->generate(this->mtx), gko::DimensionMismatch);
 }
@@ -304,16 +304,16 @@ TYPED_TEST(DistributedBicgstab, CanSetPreconditioner)
     using Solver = typename TestFixture::Solver;
     std::shared_ptr<Solver> bicgstab_precond =
         Solver::build()
-            .with_criteria(
-                gko::stop::Iteration::build().with_max_iters(3u).on(this->exec))
-            .on(this->exec)
+            .with_criteria(gko::stop::Iteration::build().with_max_iters(5u).on(
+                this->mpi_exec))
+            .on(this->mpi_exec)
             ->generate(this->mtx);
 
     auto bicgstab_factory =
         Solver::build()
-            .with_criteria(
-                gko::stop::Iteration::build().with_max_iters(3u).on(this->exec))
-            .on(this->exec);
+            .with_criteria(gko::stop::Iteration::build().with_max_iters(5u).on(
+                this->mpi_exec))
+            .on(this->mpi_exec);
     auto solver = bicgstab_factory->generate(this->mtx);
     solver->set_preconditioner(bicgstab_precond);
     auto precond = solver->get_preconditioner();
@@ -330,7 +330,7 @@ TYPED_TEST(DistributedBicgstab, CanSolveIndependentLocalSystems)
     using Solver = typename TestFixture::Solver;
     std::shared_ptr<Solver> bicgstab_precond =
         Solver::build()
-            .with_criteria(gko::stop::Iteration::build().with_max_iters(3u).on(
+            .with_criteria(gko::stop::Iteration::build().with_max_iters(5u).on(
                 this->sub_exec))
             .on(this->sub_exec)
             ->generate(this->mtx);
@@ -339,7 +339,7 @@ TYPED_TEST(DistributedBicgstab, CanSolveIndependentLocalSystems)
 
     auto bicgstab_factory =
         Solver::build()
-            .with_criteria(gko::stop::Iteration::build().with_max_iters(3u).on(
+            .with_criteria(gko::stop::Iteration::build().with_max_iters(5u).on(
                 this->sub_exec))
             .on(this->sub_exec);
     auto solver = bicgstab_factory->generate(this->mtx);
@@ -374,7 +374,7 @@ TYPED_TEST(DistributedBicgstab, CanSolveDistributedSystems)
 
     auto bicgstab_factory =
         Solver::build()
-            .with_criteria(gko::stop::Iteration::build().with_max_iters(3u).on(
+            .with_criteria(gko::stop::Iteration::build().with_max_iters(5u).on(
                 this->sub_exec))
             .on(this->mpi_exec);
     auto solver = bicgstab_factory->generate(dist_mtx);

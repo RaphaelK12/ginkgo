@@ -68,8 +68,12 @@ protected:
         char **argv;
         int argc = 0;
         exec = gko::ReferenceExecutor::create();
-        mpi_exec = gko::MpiExecutor::create(gko::ReferenceExecutor::create());
+        host = gko::ReferenceExecutor::create();
+        GKO_ASSERT_NO_MPI_ERRORS(MPI_Comm_rank(MPI_COMM_WORLD, &rank));
+        mpi_exec = gko::MpiExecutor::create(gko::CudaExecutor::create(0, host));
+        mpi_exec2 = gko::MpiExecutor::create(host);
         sub_exec = mpi_exec->get_sub_executor();
+        sub_exec2 = mpi_exec2->get_sub_executor();
         rank = mpi_exec->get_my_rank();
         ASSERT_GT(mpi_exec->get_num_ranks(), 1);
         mtx = gko::initialize<Mtx>(
@@ -95,128 +99,19 @@ protected:
     }
 
     std::shared_ptr<gko::MpiExecutor> mpi_exec;
+    std::shared_ptr<gko::MpiExecutor> mpi_exec2;
     std::shared_ptr<const gko::Executor> exec;
+    std::shared_ptr<gko::Executor> host;
     std::shared_ptr<const gko::Executor> sub_exec;
+    std::shared_ptr<const gko::Executor> sub_exec2;
     std::shared_ptr<Mtx> mtx;
     std::unique_ptr<typename Solver::Factory> ir_factory;
     std::unique_ptr<gko::LinOp> solver;
     int rank;
-
-    static void assert_same_matrices(const Mtx *m1, const Mtx *m2)
-    {
-        ASSERT_EQ(m1->get_size()[0], m2->get_size()[0]);
-        ASSERT_EQ(m1->get_size()[1], m2->get_size()[1]);
-        for (gko::size_type i = 0; i < m1->get_size()[0]; ++i) {
-            for (gko::size_type j = 0; j < m2->get_size()[1]; ++j) {
-                EXPECT_EQ(m1->at(i, j), m2->at(i, j));
-            }
-        }
-    }
 };
 
 TYPED_TEST_CASE(DistributedIr, gko::test::ValueTypes);
 
-
-TYPED_TEST(DistributedIr, DistributedIrFactoryKnowsItsExecutor)
-{
-    ASSERT_EQ(this->ir_factory->get_executor(), this->mpi_exec);
-}
-
-
-TYPED_TEST(DistributedIr, DistributedIrFactoryCreatesCorrectSolver)
-{
-    using Solver = typename TestFixture::Solver;
-
-    ASSERT_EQ(this->solver->get_size(), gko::dim<2>(3, 3));
-    auto ir_solver = static_cast<Solver *>(this->solver.get());
-    ASSERT_NE(ir_solver->get_system_matrix(), nullptr);
-    ASSERT_EQ(ir_solver->get_system_matrix(), this->mtx);
-}
-
-
-TYPED_TEST(DistributedIr, CanBeCopied)
-{
-    using Mtx = typename TestFixture::Mtx;
-    using Solver = typename TestFixture::Solver;
-    auto copy = this->ir_factory->generate(Mtx::create(this->exec));
-
-    copy->copy_from(this->solver.get());
-
-    ASSERT_EQ(copy->get_size(), gko::dim<2>(3, 3));
-    auto copy_mtx = static_cast<Solver *>(copy.get())->get_system_matrix();
-    this->assert_same_matrices(static_cast<const Mtx *>(copy_mtx.get()),
-                               this->mtx.get());
-}
-
-
-TYPED_TEST(DistributedIr, CanBeMoved)
-{
-    using Mtx = typename TestFixture::Mtx;
-    using Solver = typename TestFixture::Solver;
-    auto copy = this->ir_factory->generate(Mtx::create(this->exec));
-
-    copy->copy_from(std::move(this->solver));
-
-    ASSERT_EQ(copy->get_size(), gko::dim<2>(3, 3));
-    auto copy_mtx = static_cast<Solver *>(copy.get())->get_system_matrix();
-    this->assert_same_matrices(static_cast<const Mtx *>(copy_mtx.get()),
-                               this->mtx.get());
-}
-
-
-TYPED_TEST(DistributedIr, CanBeCloned)
-{
-    using Mtx = typename TestFixture::Mtx;
-    using Solver = typename TestFixture::Solver;
-    auto clone = this->solver->clone();
-
-    ASSERT_EQ(clone->get_size(), gko::dim<2>(3, 3));
-    auto clone_mtx = static_cast<Solver *>(clone.get())->get_system_matrix();
-    this->assert_same_matrices(static_cast<const Mtx *>(clone_mtx.get()),
-                               this->mtx.get());
-}
-
-
-TYPED_TEST(DistributedIr, CanBeCleared)
-{
-    using Solver = typename TestFixture::Solver;
-    this->solver->clear();
-
-    ASSERT_EQ(this->solver->get_size(), gko::dim<2>(0, 0));
-    auto solver_mtx =
-        static_cast<Solver *>(this->solver.get())->get_system_matrix();
-    ASSERT_EQ(solver_mtx, nullptr);
-}
-
-
-TYPED_TEST(DistributedIr, ApplyUsesInitialGuessReturnsTrue)
-{
-    ASSERT_TRUE(this->solver->apply_uses_initial_guess());
-}
-
-
-TYPED_TEST(DistributedIr, CanSetCriteriaAgain)
-{
-    using Solver = typename TestFixture::Solver;
-    std::shared_ptr<gko::stop::CriterionFactory> init_crit =
-        gko::stop::Iteration::build().with_max_iters(5u).on(this->exec);
-    auto ir_factory = Solver::build().with_criteria(init_crit).on(this->exec);
-
-    ASSERT_EQ((ir_factory->get_parameters().criteria).back(), init_crit);
-
-    auto solver = ir_factory->generate(this->mtx);
-    std::shared_ptr<gko::stop::CriterionFactory> new_crit =
-        gko::stop::Iteration::build().with_max_iters(5u).on(this->exec);
-
-    solver->set_stop_criterion_factory(new_crit);
-    auto new_crit_fac = solver->get_stop_criterion_factory();
-    auto niter =
-        static_cast<const gko::stop::Iteration::Factory *>(new_crit_fac.get())
-            ->get_parameters()
-            .max_iters;
-
-    ASSERT_EQ(niter, 5);
-}
 
 TYPED_TEST(DistributedIr, CanSolveIndependentLocalSystems)
 {
@@ -240,7 +135,10 @@ TYPED_TEST(DistributedIr, CanSolveIndependentLocalSystems)
     auto solver = ir_factory->generate(this->mtx);
     solver->apply(b.get(), x.get());
 
-    GKO_ASSERT_MTX_NEAR(x, l({1.0, 3.0, 2.0}), r<value_type>::value);
+    auto x_h = Mtx::create(this->mpi_exec2);
+    x_h->copy_from(x.get());
+
+    GKO_ASSERT_MTX_NEAR(x_h, l({1.0, 3.0, 2.0}), r<value_type>::value);
 }
 
 
@@ -273,10 +171,12 @@ TYPED_TEST(DistributedIr, CanSolveDistributedSystems)
     auto solver = ir_factory->generate(dist_mtx);
     solver->apply(b.get(), x.get());
 
+    auto x_h = Mtx::create(this->mpi_exec2);
+    x_h->copy_from(x.get());
     if (this->rank == 0) {
-        GKO_ASSERT_MTX_NEAR(x, l({1.0, 2.0}), r<value_type>::value);
+        GKO_ASSERT_MTX_NEAR(x_h, l({1.0, 2.0}), r<value_type>::value);
     } else {
-        GKO_ASSERT_MTX_NEAR(x, l({3.0}), r<value_type>::value);
+        GKO_ASSERT_MTX_NEAR(x_h, l({3.0}), r<value_type>::value);
     }
 }
 
