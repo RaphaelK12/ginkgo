@@ -195,9 +195,9 @@ __global__ __launch_bounds__(default_block_size) void step_2_kernel(
 
 template <typename ValueType>
 __global__ __launch_bounds__(default_dot_size) void multidot_kernel(
-    size_type i, size_type num_rows, size_type nrhs,
-    const ValueType *__restrict__ p_i, const ValueType *__restrict__ g_k,
-    size_type g_k_stride, ValueType *__restrict__ alpha,
+    size_type num_rows, size_type nrhs, const ValueType *__restrict__ p_i,
+    const ValueType *__restrict__ g_k, size_type g_k_stride,
+    ValueType *__restrict__ alpha,
     const stopping_status *__restrict__ stop_status)
 {
     const auto tidx = threadIdx.x;

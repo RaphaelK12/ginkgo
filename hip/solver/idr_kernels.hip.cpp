@@ -139,7 +139,7 @@ void update_g_and_u(std::shared_ptr<const HipExecutor> exec, size_type k,
             components::fill_array(exec, alpha->get_values(), nrhs,
                                    zero<ValueType>());
             hipLaunchKernelGGL(
-                multidot_kernel, grid_dim, block_dim, 0, 0, i, size, nrhs,
+                multidot_kernel, grid_dim, block_dim, 0, 0, size, nrhs,
                 as_hip_type(p_i), as_hip_type(g_k->get_values()),
                 g_k->get_stride(), as_hip_type(alpha->get_values()),
                 as_hip_type(stop_status->get_const_data()));
@@ -186,11 +186,11 @@ void update_m(std::shared_ptr<const HipExecutor> exec, size_type k,
 
     for (size_type i = k; i < subspace_dim; i++) {
         const auto p_i = p->get_const_values() + i * p_stride;
-        auto m_i = m->get_values() + i * m_stride + i * nrhs;
+        auto m_i = m->get_values() + i * m_stride + k * nrhs;
         if (nrhs > 1) {
             components::fill_array(exec, m_i, nrhs, zero<ValueType>());
-            hipLaunchKernelGGL(multidot_kernel, grid_dim, block_dim, 0, 0, i,
-                               size, nrhs, as_hip_type(p_i),
+            hipLaunchKernelGGL(multidot_kernel, grid_dim, block_dim, 0, 0, size,
+                               nrhs, as_hip_type(p_i),
                                as_hip_type(g_k->get_const_values()),
                                g_k->get_stride(), as_hip_type(m_i),
                                as_hip_type(stop_status->get_const_data()));
@@ -311,7 +311,7 @@ void step_3(std::shared_ptr<const HipExecutor> exec, const size_type k,
             const Array<stopping_status> *stop_status)
 {
     update_g_and_u(exec, k, p, m, alpha, g, g_k, u, stop_status);
-    update_m(exec, k, p, g, m, stop_status);
+    update_m(exec, k, p, g_k, m, stop_status);
     update_x_r_and_f(k, m, g, u, f, residual, x, stop_status);
 }
 

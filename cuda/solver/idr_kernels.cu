@@ -140,9 +140,8 @@ void update_g_and_u(std::shared_ptr<const CudaExecutor> exec, size_type k,
             components::fill_array(exec, alpha->get_values(), nrhs,
                                    zero<ValueType>());
             multidot_kernel<<<grid_dim, block_dim>>>(
-                i, size, nrhs, as_cuda_type(p_i),
-                as_cuda_type(g_k->get_values()), g_k->get_stride(),
-                as_cuda_type(alpha->get_values()),
+                size, nrhs, as_cuda_type(p_i), as_cuda_type(g_k->get_values()),
+                g_k->get_stride(), as_cuda_type(alpha->get_values()),
                 as_cuda_type(stop_status->get_const_data()));
         } else {
             cublas::dot(exec->get_cublas_handle(), size, p_i, 1,
@@ -186,16 +185,16 @@ void update_m(std::shared_ptr<const CudaExecutor> exec, size_type k,
 
     for (size_type i = k; i < subspace_dim; i++) {
         const auto p_i = p->get_const_values() + i * p_stride;
-        auto m_i = m->get_values() + i * m_stride + i * nrhs;
+        auto m_i = m->get_values() + i * m_stride + k * nrhs;
         if (nrhs > 1) {
             components::fill_array(exec, m_i, nrhs, zero<ValueType>());
             multidot_kernel<<<grid_dim, block_dim>>>(
-                i, size, nrhs, as_cuda_type(p_i),
+                size, nrhs, as_cuda_type(p_i),
                 as_cuda_type(g_k->get_const_values()), g_k->get_stride(),
                 as_cuda_type(m_i), as_cuda_type(stop_status->get_const_data()));
         } else {
             cublas::dot(exec->get_cublas_handle(), size, p_i, 1,
-                        g_k->get_values(), g_k->get_stride(), m_i);
+                        g_k->get_const_values(), g_k->get_stride(), m_i);
         }
     }
 }
@@ -308,7 +307,7 @@ void step_3(std::shared_ptr<const CudaExecutor> exec, const size_type k,
             const Array<stopping_status> *stop_status)
 {
     update_g_and_u(exec, k, p, m, alpha, g, g_k, u, stop_status);
-    update_m(exec, k, p, g, m, stop_status);
+    update_m(exec, k, p, g_k, m, stop_status);
     update_x_r_and_f(k, m, g, u, f, residual, x, stop_status);
 }
 
