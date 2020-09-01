@@ -131,7 +131,8 @@ class Csr : public EnableLinOp<Csr<ValueType, IndexType>>,
             public WritableToMatrixData<ValueType, IndexType>,
             public Transposable,
             public Permutable<IndexType>,
-            public AbsoluteComputable {
+            public EnableAbsoluteComputation<
+                Csr<remove_complex<ValueType>, IndexType>> {
     friend class EnableCreateMethod<Csr>;
     friend class EnablePolymorphicObject<Csr, LinOp>;
     friend class Coo<ValueType, IndexType>;
@@ -147,6 +148,7 @@ public:
     using index_type = IndexType;
     using transposed_type = Csr<ValueType, IndexType>;
     using mat_data = matrix_data<ValueType, IndexType>;
+    using absolute_type = Csr<remove_complex<ValueType>, IndexType>;
 
     class automatical;
 
@@ -706,7 +708,7 @@ public:
 
     friend class Csr<make_complex<ValueType>, IndexType>;
 
-    std::unique_ptr<LinOp> get_absolute() const override;
+    std::unique_ptr<absolute_type> get_absolute() const override;
 
     /**
      * Sorts all (value, col_idx) pairs in each row by column index

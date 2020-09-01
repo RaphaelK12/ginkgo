@@ -118,7 +118,7 @@ void AmgxPgm<ValueType, IndexType>::generate()
     size_type num_unagg_prev{0};
     // TODO: if mtx is a hermitian matrix, weight_mtx = abs(mtx)
     // compute weight_mtx = (abs(mtx) + abs(mtx'))/2;
-    auto abs_mtx = gko::as<weight_matrix_type>(amgxpgm_op->get_absolute());
+    auto abs_mtx = amgxpgm_op->get_absolute();
     // abs_mtx is already real valuetype, so transpose is enough
     auto weight_mtx = gko::as<weight_matrix_type>(abs_mtx->transpose());
     auto half_scaler = initialize<matrix::Dense<rmc_value_type>>({0.5}, exec);

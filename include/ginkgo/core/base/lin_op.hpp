@@ -624,21 +624,28 @@ public:
 
 
 /**
- * The absolute of a LinOp implementing this interface can be computed.
- * get_absolute get a new LinOp which contains absolute values from a LinOp.
+ * The EnableAbsoluteComputation mixin implementing this interface can be
+ * computed. get_absolute get a new LinOp which contains absolute values from a
+ * LinOp.
+ *
+ * @tparam ConcreteLinOp  the concrete LinOp which is being implemented
+ *                        [CRTP parameter]
  *
  * @ingroup LinOp
  */
-class AbsoluteComputable {
+template <typename ConcreteLinOp>
+class EnableAbsoluteComputation {
 public:
-    virtual ~AbsoluteComputable() = default;
+    // using absolute_type = ;
+
+    virtual ~EnableAbsoluteComputation() = default;
 
     /**
      * Gets the absolute LinOp
      *
      * @return a pointer to the new absolute object
      */
-    virtual std::unique_ptr<LinOp> get_absolute() const = 0;
+    virtual std::unique_ptr<ConcreteLinOp> get_absolute() const = 0;
 };
 
 

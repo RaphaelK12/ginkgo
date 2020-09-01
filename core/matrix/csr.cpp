@@ -484,7 +484,8 @@ Csr<ValueType, IndexType>::extract_diagonal() const
 
 
 template <typename ValueType, typename IndexType>
-std::unique_ptr<LinOp> Csr<ValueType, IndexType>::get_absolute() const
+std::unique_ptr<Csr<remove_complex<ValueType>, IndexType>>
+Csr<ValueType, IndexType>::get_absolute() const
 {
     using abs_type = remove_complex<ValueType>;
     using abs_csr = Csr<abs_type, IndexType>;
