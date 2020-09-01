@@ -61,7 +61,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // Global command-line arguments
 DEFINE_string(executor, "reference",
               "The executor used to run the benchmarks, one of: reference, "
-              "omp, cuda, hip");
+              "omp, cuda, hip, mpi-reference, mpi-omp, mpi-cuda");
 
 DEFINE_uint32(device_id, 0, "ID of the device where to run the code");
 
@@ -257,15 +257,31 @@ void backup_results(rapidjson::Document &results)
 const std::map<std::string, std::function<std::shared_ptr<gko::Executor>()>>
     executor_factory{
         {"reference", [] { return gko::ReferenceExecutor::create(); }},
+        {"mpi-reference",
+         [] {
+             return gko::MpiExecutor::create(gko::ReferenceExecutor::create());
+         }},
         {"omp", [] { return gko::OmpExecutor::create(); }},
+        {"mpi-omp",
+         [] { return gko::MpiExecutor::create(gko::OmpExecutor::create()); }},
         {"cuda",
          [] {
              return gko::CudaExecutor::create(FLAGS_device_id,
                                               gko::OmpExecutor::create(), true);
          }},
-        {"hip", [] {
+        {"mpi-cuda",
+         [] {
+             return gko::MpiExecutor::create(gko::CudaExecutor::create(
+                 FLAGS_device_id, gko::OmpExecutor::create(), true));
+         }},
+        {"hip",
+         [] {
              return gko::HipExecutor::create(FLAGS_device_id,
                                              gko::OmpExecutor::create(), true);
+         }},
+        {"mpi-hip", [] {
+             return gko::MpiExecutor::create(gko::HipExecutor::create(
+                 FLAGS_device_id, gko::OmpExecutor::create(), true));
          }}};
 
 
