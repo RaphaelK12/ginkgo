@@ -406,6 +406,45 @@ void Csr<ValueType, IndexType>::read(const mat_data &data)
 
 
 template <typename ValueType, typename IndexType>
+void Csr<ValueType, IndexType>::read(const mat_data &data,
+                                     const Array<size_type> &dist)
+{
+    auto exec = this->get_executor();
+    GKO_ASSERT_MPI_EXEC(exec.get());
+    auto mpi_exec = as<gko::MpiExecutor>(exec.get());
+    auto rank = mpi_exec->get_my_rank();
+    auto local_num_rows = dist.get_num_elems();
+    auto row_idx_set = gko::IndexSet<size_type>{data.size[0]};
+    row_idx_set.add_indices(dist.get_const_data(),
+                            dist.get_const_data() + local_num_rows);
+    size_type nnz = 0;
+    size_type lnnz = 0;
+    for (const auto &elem : data.nonzeros) {
+        nnz += (elem.value != zero<ValueType>());
+        if (row_idx_set.is_element(elem.row)) {
+            lnnz += (elem.value != zero<ValueType>());
+        }
+    }
+    auto tmp = Coo<ValueType, IndexType>::create(
+        this->get_executor()->get_master(), data.size, row_idx_set, lnnz);
+    size_type elt = 0;
+    size_type lrow = 0;
+    for (const auto &elem : data.nonzeros) {
+        auto val = elem.value;
+        if (row_idx_set.is_element(elem.row) && val != zero<ValueType>()) {
+            lrow = row_idx_set.get_local_index(elem.row);
+            tmp->get_row_idxs()[elt] = lrow;
+            tmp->get_col_idxs()[elt] = elem.column;
+            tmp->get_values()[elt] = elem.value;
+            elt++;
+        }
+    }
+    tmp->move_to(this);
+    this->make_srow();
+}
+
+
+template <typename ValueType, typename IndexType>
 void Csr<ValueType, IndexType>::write(mat_data &data) const
 {
     std::unique_ptr<const LinOp> op{};

@@ -176,11 +176,70 @@ void Hybrid<ValueType, IndexType>::move_to(Csr<ValueType, IndexType> *result)
 {
     this->convert_to(result);
 }
-
-
 template <typename ValueType, typename IndexType>
 void Hybrid<ValueType, IndexType>::read(const mat_data &data)
 {
+    // get the limitation of columns of the ell part
+    // calculate coo storage
+    size_type ell_lim = zero<size_type>();
+    size_type coo_lim = zero<size_type>();
+    Array<size_type> row_nnz(this->get_executor()->get_master(), data.size[0]);
+    get_each_row_nnz(data, row_nnz);
+    strategy_->compute_hybrid_config(row_nnz, &ell_lim, &coo_lim);
+
+    auto tmp =
+        Hybrid::create(this->get_executor()->get_master(), data.size, ell_lim,
+                       data.size[0], coo_lim, this->get_strategy());
+
+    // Get values and column indexes.
+    size_type ind = 0;
+    size_type n = data.nonzeros.size();
+    auto coo_vals = tmp->get_coo_values();
+    auto coo_col_idxs = tmp->get_coo_col_idxs();
+    auto coo_row_idxs = tmp->get_coo_row_idxs();
+    size_type coo_ind = 0;
+    for (size_type row = 0; row < data.size[0]; row++) {
+        size_type col = 0;
+
+        // ell_part
+        while (ind < n && data.nonzeros[ind].row == row && col < ell_lim) {
+            auto val = data.nonzeros[ind].value;
+            if (val != zero<ValueType>()) {
+                tmp->ell_val_at(row, col) = val;
+                tmp->ell_col_at(row, col) = data.nonzeros[ind].column;
+                col++;
+            }
+            ind++;
+        }
+        for (auto i = col; i < ell_lim; i++) {
+            tmp->ell_val_at(row, i) = zero<ValueType>();
+            tmp->ell_col_at(row, i) = 0;
+        }
+
+        // coo_part
+        while (ind < n && data.nonzeros[ind].row == row) {
+            auto val = data.nonzeros[ind].value;
+            if (val != zero<ValueType>()) {
+                coo_vals[coo_ind] = val;
+                coo_col_idxs[coo_ind] = data.nonzeros[ind].column;
+                coo_row_idxs[coo_ind] = data.nonzeros[ind].row;
+                coo_ind++;
+            }
+            ind++;
+        }
+    }
+
+    // Return the matrix
+    tmp->move_to(this);
+}
+
+
+template <typename ValueType, typename IndexType>
+void Hybrid<ValueType, IndexType>::read(const mat_data &data,
+                                        const Array<size_type> &dist)
+{
+    auto exec = this->get_executor();
+    GKO_ASSERT_MPI_EXEC(exec.get());
     // get the limitation of columns of the ell part
     // calculate coo storage
     size_type ell_lim = zero<size_type>();

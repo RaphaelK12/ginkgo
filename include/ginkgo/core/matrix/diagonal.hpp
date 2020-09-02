@@ -138,6 +138,10 @@ public:
 
     void read(const mat_data32 &data) override;
 
+    void read(const mat_data &data, const Array<size_type> &dist) override;
+
+    void read(const mat_data32 &data, const Array<size_type> &dist) override;
+
     void write(mat_data &data) const override;
 
     void write(mat_data32 &data) const override;

@@ -152,6 +152,12 @@ public:
         this->set_size(gko::dim<2>{csr_->get_size()});
     }
 
+    void read(const mat_data &data,
+              const gko::Array<gko::size_type> &dist) override
+    {
+        GKO_NOT_IMPLEMENTED;
+    }
+
     gko::size_type get_num_stored_elements() const noexcept
     {
         return csr_->get_num_stored_elements();
@@ -212,6 +218,12 @@ public:
         this->set_size(gko::dim<2>{csr_->get_size()});
     }
 
+    void read(const mat_data &data,
+              const gko::Array<gko::size_type> &dist) override
+    {
+        GKO_NOT_IMPLEMENTED;
+    }
+
     gko::size_type get_num_stored_elements() const noexcept
     {
         return csr_->get_num_stored_elements();
@@ -270,6 +282,12 @@ public:
     {
         csr_->read(data);
         this->set_size(gko::dim<2>{csr_->get_size()});
+    }
+
+    void read(const mat_data &data,
+              const gko::Array<gko::size_type> &dist) override
+    {
+        GKO_NOT_IMPLEMENTED;
     }
 
     gko::size_type get_num_stored_elements() const noexcept
@@ -334,6 +352,12 @@ public:
     {
         csr_->read(data);
         this->set_size(gko::dim<2>{csr_->get_size()});
+    }
+
+    void read(const mat_data &data,
+              const gko::Array<gko::size_type> &dist) override
+    {
+        GKO_NOT_IMPLEMENTED;
     }
 
     gko::size_type get_num_stored_elements() const noexcept
@@ -453,6 +477,12 @@ public:
             this->get_size()[1], this->get_descr(), t_csr->get_const_values(),
             t_csr->get_const_row_ptrs(), t_csr->get_const_col_idxs(), hyb_,
             Threshold, Partition);
+    }
+
+    void read(const mat_data &data,
+              const gko::Array<gko::size_type> &dist) override
+    {
+        GKO_NOT_IMPLEMENTED;
     }
 
     ~CuspHybrid() override
@@ -585,6 +615,12 @@ public:
                               cu_index, CUSPARSE_INDEX_BASE_ZERO, cu_value));
     }
 
+    void read(const mat_data &data,
+              const gko::Array<gko::size_type> &dist) override
+    {
+        GKO_NOT_IMPLEMENTED;
+    }
+
     gko::size_type get_num_stored_elements() const noexcept
     {
         return csr_->get_num_stored_elements();
@@ -659,6 +695,12 @@ public:
                               as_culibs_type(coo_->get_col_idxs()),
                               as_culibs_type(coo_->get_values()), cu_index,
                               CUSPARSE_INDEX_BASE_ZERO, cu_value));
+    }
+
+    void read(const mat_data &data,
+              const gko::Array<gko::size_type> &dist) override
+    {
+        GKO_NOT_IMPLEMENTED;
     }
 
     gko::size_type get_num_stored_elements() const noexcept

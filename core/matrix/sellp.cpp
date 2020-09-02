@@ -252,6 +252,73 @@ void Sellp<ValueType, IndexType>::read(const mat_data &data)
 
 
 template <typename ValueType, typename IndexType>
+void Sellp<ValueType, IndexType>::read(const mat_data &data,
+                                       const Array<size_type> &dist)
+{
+    auto exec = this->get_executor();
+    GKO_ASSERT_MPI_EXEC(exec.get());
+    // Make sure that slice_size and stride factor are not zero.
+    auto slice_size = (this->get_slice_size() == 0) ? default_slice_size
+                                                    : this->get_slice_size();
+    auto stride_factor = (this->get_stride_factor() == 0)
+                             ? default_stride_factor
+                             : this->get_stride_factor();
+
+    // Allocate space for slice_cols.
+    size_type slice_num =
+        static_cast<index_type>((data.size[0] + slice_size - 1) / slice_size);
+    vector<size_type> slice_lengths(
+        slice_num, 0, {this->get_executor()->get_master()->get_mem_space()});
+
+    // Get the number of maximum columns for every slice.
+    auto total_cols =
+        calculate_total_cols(data, slice_size, stride_factor, slice_lengths);
+
+    // Create an SELL-P format matrix based on the sizes.
+    auto tmp = Sellp::create(this->get_executor()->get_master(), data.size,
+                             slice_size, stride_factor, total_cols);
+
+    // Get slice length, slice set, matrix values and column indexes.
+    index_type slice_set = 0;
+    size_type ind = 0;
+    auto n = data.nonzeros.size();
+    for (size_type slice = 0; slice < slice_num; slice++) {
+        tmp->get_slice_lengths()[slice] = slice_lengths[slice];
+        tmp->get_slice_sets()[slice] = slice_set;
+        slice_set += tmp->get_slice_lengths()[slice];
+        for (size_type row_in_slice = 0; row_in_slice < slice_size;
+             row_in_slice++) {
+            size_type col = 0;
+            size_type row = slice * slice_size + row_in_slice;
+            while (ind < n && data.nonzeros[ind].row == row) {
+                auto val = data.nonzeros[ind].value;
+                auto sellp_ind =
+                    (tmp->get_slice_sets()[slice] + col) * slice_size +
+                    row_in_slice;
+                if (val != zero<ValueType>()) {
+                    tmp->get_values()[sellp_ind] = val;
+                    tmp->get_col_idxs()[sellp_ind] = data.nonzeros[ind].column;
+                    col++;
+                }
+                ind++;
+            }
+            for (auto i = col; i < tmp->get_slice_lengths()[slice]; i++) {
+                auto sellp_ind =
+                    (tmp->get_slice_sets()[slice] + i) * slice_size +
+                    row_in_slice;
+                tmp->get_values()[sellp_ind] = zero<ValueType>();
+                tmp->get_col_idxs()[sellp_ind] = 0;
+            }
+        }
+    }
+    tmp->get_slice_sets()[slice_num] = slice_set;
+
+    // Return the matrix.
+    tmp->move_to(this);
+}
+
+
+template <typename ValueType, typename IndexType>
 void Sellp<ValueType, IndexType>::write(mat_data &data) const
 {
     std::unique_ptr<const LinOp> op{};

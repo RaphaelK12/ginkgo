@@ -688,6 +688,8 @@ public:
 
     void read(const mat_data &data) override;
 
+    void read(const mat_data &data, const Array<size_type> &dist) override;
+
     void write(mat_data &data) const override;
 
     std::unique_ptr<LinOp> transpose() const override;
@@ -868,6 +870,27 @@ protected:
           srow_(exec, strategy->clac_size(num_nonzeros)),
           strategy_(strategy->copy())
     {}
+
+    /**
+     * Creates an uninitialized CSR matrix of the specified size.
+     *
+     * @param exec  Executor associated to the matrix
+     * @param size  size of the matrix
+     * @param num_nonzeros  number of nonzeros
+     * @param strategy  the strategy of CSR
+     */
+    explicit Csr(std::shared_ptr<const Executor> exec, const dim<2> &size,
+                 const IndexSet<size_type> &index_set, size_type num_nonzeros)
+        : EnableLinOp<Csr>(exec, size, size),
+          index_set_(index_set),
+          values_(exec, num_nonzeros),
+          col_idxs_(exec, num_nonzeros),
+          row_ptrs_(exec, size[0] + 1),
+          srow_(exec),
+          strategy_(std::make_shared<sparselib>())
+    {
+        this->set_size(dim<2>(index_set_.get_num_elems(), size[1]));
+    }
 
     /**
      * Creates a CSR matrix from already allocated (and initialized) row

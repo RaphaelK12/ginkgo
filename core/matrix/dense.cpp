@@ -657,6 +657,43 @@ inline void read_impl(MatrixType *mtx, const MatrixData &data)
 }
 
 
+template <typename MatrixType, typename MatrixData>
+inline void read_impl(MatrixType *mtx, const MatrixData &data,
+                      const Array<size_type> &dist)
+{
+    auto exec = mtx->get_executor();
+    GKO_ASSERT_MPI_EXEC(exec.get());
+    auto mpi_exec = as<gko::MpiExecutor>(exec.get());
+    auto rank = mpi_exec->get_my_rank();
+    auto local_num_rows = dist.get_num_elems();
+    auto row_idx_set = gko::IndexSet<size_type>{data.size[0]};
+    row_idx_set.add_indices(dist.get_const_data(),
+                            dist.get_const_data() + local_num_rows);
+    auto tmp = MatrixType::create(exec->get_master(), data.size, row_idx_set,
+                                  data.size[1]);
+    auto lnnz_max = local_num_rows * data.size[1];
+    size_type lnnz = 0;
+    size_type col = 0;
+    for (size_type nnz = 0; nnz < data.nonzeros.size(); ++nnz) {
+        if (lnnz < lnnz_max && row_idx_set.is_element(data.nonzeros[nnz].row)) {
+            if (data.nonzeros[nnz].column == col) {
+                tmp->get_values()[lnnz] = data.nonzeros[nnz].value;
+            } else {
+                tmp->get_values()[lnnz] =
+                    zero<typename MatrixType::value_type>();
+            }
+            if (col < data.size[1] - 1) {
+                col++;
+            } else {
+                col = 0;
+            }
+            ++lnnz;
+        }
+    }
+    tmp->move_to(mtx);
+}
+
+
 }  // namespace
 
 
@@ -671,6 +708,21 @@ template <typename ValueType>
 void Dense<ValueType>::read(const mat_data32 &data)
 {
     read_impl(this, data);
+}
+
+
+template <typename ValueType>
+void Dense<ValueType>::read(const mat_data &data, const Array<size_type> &dist)
+{
+    read_impl(this, data, dist);
+}
+
+
+template <typename ValueType>
+void Dense<ValueType>::read(const mat_data32 &data,
+                            const Array<size_type> &dist)
+{
+    read_impl(this, data, dist);
 }
 
 

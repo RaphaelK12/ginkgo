@@ -89,6 +89,8 @@ public:
 
     void read(const mat_data &data) override;
 
+    void read(const mat_data &data, const Array<size_type> &dist) override;
+
     void write(mat_data &data) const override;
 
     std::unique_ptr<LinOp> transpose() const override;

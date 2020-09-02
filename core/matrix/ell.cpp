@@ -212,6 +212,46 @@ void Ell<ValueType, IndexType>::read(const mat_data &data)
 
 
 template <typename ValueType, typename IndexType>
+void Ell<ValueType, IndexType>::read(const mat_data &data,
+                                     const Array<size_type> &dist)
+{
+    auto exec = this->get_executor();
+    GKO_ASSERT_MPI_EXEC(exec.get());
+    // Get the number of stored elements of every row.
+    auto num_stored_elements_per_row = calculate_max_nnz_per_row(data);
+
+    // Create an ELLPACK format matrix based on the sizes.
+    auto tmp = Ell::create(this->get_executor()->get_master(), data.size,
+                           num_stored_elements_per_row, data.size[0]);
+
+    // Get values and column indexes.
+    size_type ind = 0;
+    size_type n = data.nonzeros.size();
+    auto vals = tmp->get_values();
+    auto col_idxs = tmp->get_col_idxs();
+    for (size_type row = 0; row < data.size[0]; row++) {
+        size_type col = 0;
+        while (ind < n && data.nonzeros[ind].row == row) {
+            auto val = data.nonzeros[ind].value;
+            if (val != zero<ValueType>()) {
+                tmp->val_at(row, col) = val;
+                tmp->col_at(row, col) = data.nonzeros[ind].column;
+                col++;
+            }
+            ind++;
+        }
+        for (auto i = col; i < num_stored_elements_per_row; i++) {
+            tmp->val_at(row, i) = zero<ValueType>();
+            tmp->col_at(row, i) = 0;
+        }
+    }
+
+    // Return the matrix
+    tmp->move_to(this);
+}
+
+
+template <typename ValueType, typename IndexType>
 void Ell<ValueType, IndexType>::write(mat_data &data) const
 {
     std::unique_ptr<const LinOp> op{};

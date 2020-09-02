@@ -160,6 +160,52 @@ TYPED_TEST(DistributedDense, CanBeConstructedWithSizeAndStride)
 }
 
 
+TYPED_TEST(DistributedDense, CanBeReadFromMatrixData)
+{
+    using value_type = typename TestFixture::value_type;
+    using size_type = gko::size_type;
+    auto m = gko::matrix::Dense<TypeParam>::create(this->mpi_exec);
+    size_type *data;
+    size_type nelems = 0;
+    if (this->rank == 0) {
+        data = new size_type[2]{1, 2};
+        nelems = 2;
+    } else {
+        data = new size_type[2]{0, 3};
+        nelems = 2;
+    }
+    auto row_dist = gko::Array<size_type>{this->sub_exec, nelems, data};
+
+    // clang-format off
+    m->read(gko::matrix_data<TypeParam>{{4, 2},
+                                            {{0, 0, 1.0},
+                                             {0, 1, 3.0},
+                                             {1, 0, 0.0},
+                                             {1, 1, 5.0},
+                                             {2, 0, 6.0},
+                                             {2, 1, 0.0},
+                                             {3, 0, 2.0},
+                                             {3, 1, 4.0}}}, row_dist);
+    // clang-format on
+    if (this->rank == 0) {
+        ASSERT_EQ(m->get_size(), gko::dim<2>(2, 2));
+        ASSERT_EQ(m->get_global_size(), gko::dim<2>(4, 2));
+        ASSERT_EQ(m->get_num_stored_elements(), 4);
+        EXPECT_EQ(m->at(0, 0), value_type{0.0});
+        EXPECT_EQ(m->at(0, 1), value_type{5.0});
+        EXPECT_EQ(m->at(1, 0), value_type{6.0});
+        EXPECT_EQ(m->at(1, 1), value_type{0.0});
+    } else {
+        ASSERT_EQ(m->get_size(), gko::dim<2>(2, 2));
+        ASSERT_EQ(m->get_global_size(), gko::dim<2>(4, 2));
+        ASSERT_EQ(m->get_num_stored_elements(), 4);
+        EXPECT_EQ(m->at(0, 0), value_type{1.0});
+        EXPECT_EQ(m->at(0, 1), value_type{3.0});
+        EXPECT_EQ(m->at(1, 0), value_type{2.0});
+        EXPECT_EQ(m->at(1, 1), value_type{4.0});
+    }
+}
+
 TYPED_TEST(DistributedDense,
            ColumnVectorCanBeInitializedWithInitializeAndStride)
 {

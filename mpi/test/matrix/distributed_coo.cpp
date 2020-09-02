@@ -146,6 +146,63 @@ TYPED_TEST(DistributedCoo, CanBeEmpty)
 }
 
 
+TYPED_TEST(DistributedCoo, CanBeReadFromMatrixData)
+{
+    using Mtx = typename TestFixture::Mtx;
+    auto m = Mtx::create(this->sub_exec);
+    auto m_sep = Mtx::create(this->mpi_exec);
+    using size_type = gko::size_type;
+
+    size_type *data;
+    size_type nelems = 0;
+    if (this->rank == 0) {
+        data = new size_type[2]{0, 1};
+        nelems = 2;
+        //clang-format off
+        m->read({{2, 3},
+                 {{0, 0, 3.0},
+                  {0, 1, 4.0},
+                  {0, 2, 1.0},
+                  {1, 0, 2.0},
+                  {1, 1, 0.0},
+                  {1, 2, 4.0}}});
+        //clang-format on
+    } else {
+        data = new size_type[2]{2, 3};
+        nelems = 2;
+        //clang-format off
+        m->read({{2, 3},
+                 {{0, 0, 1.0},
+                  {0, 1, 3.0},
+                  {0, 2, 2.0},
+                  {1, 0, 0.0},
+                  {1, 1, 5.0},
+                  {1, 2, 0.0}}});
+        //clang-format on
+    }
+    auto row_dist = gko::Array<size_type>{this->sub_exec, nelems, data};
+    //clang-format off
+    m_sep->read({{4, 3},
+                 {{0, 0, 3.0},
+                  {0, 1, 4.0},
+                  {0, 2, 1.0},
+                  {1, 0, 2.0},
+                  {1, 1, 0.0},
+                  {1, 2, 4.0},
+                  {2, 0, 1.0},
+                  {2, 1, 3.0},
+                  {2, 2, 2.0},
+                  {3, 0, 0.0},
+                  {3, 1, 5.0},
+                  {3, 2, 0.0}}},
+                row_dist);
+    //clang-format on
+    ASSERT_EQ(m->get_size(), m_sep->get_size());
+
+    this->assert_equal_mtxs(m.get(), m_sep.get());
+}
+
+
 TYPED_TEST(DistributedCoo, CanBeConstructedFromExistingExecutorData)
 {
     using Mtx = typename TestFixture::Mtx;

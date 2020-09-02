@@ -115,6 +115,8 @@ public:
 
     void read(const mat_data &data) override;
 
+    void read(const mat_data &data, const Array<size_type> &dist) override;
+
     void write(mat_data &data) const override;
 
     std::unique_ptr<Diagonal<ValueType>> extract_diagonal() const override;
@@ -295,6 +297,25 @@ protected:
           col_idxs_(exec, num_nonzeros),
           row_idxs_(exec, num_nonzeros)
     {}
+
+
+    /**
+     * Creates an uninitialized COO matrix of the specified size.
+     *
+     * @param exec  Executor associated to the matrix
+     * @param size  size of the matrix
+     * @param num_nonzeros  number of nonzeros
+     */
+    Coo(std::shared_ptr<const Executor> exec, const dim<2> &size,
+        const IndexSet<size_type> &index_set, size_type num_nonzeros)
+        : EnableLinOp<Coo>(exec, size, size),
+          index_set_(index_set),
+          values_(exec, num_nonzeros),
+          col_idxs_(exec, num_nonzeros),
+          row_idxs_(exec, num_nonzeros)
+    {
+        this->set_size(dim<2>(index_set_.get_num_elems(), size[1]));
+    }
 
     /**
      * Creates a COO matrix from already allocated (and initialized) row

@@ -117,6 +117,39 @@ void SparsityCsr<ValueType, IndexType>::read(const mat_data &data)
 
 
 template <typename ValueType, typename IndexType>
+void SparsityCsr<ValueType, IndexType>::read(const mat_data &data,
+                                             const Array<size_type> &dist)
+{
+    auto exec = this->get_executor();
+    GKO_ASSERT_MPI_EXEC(exec.get());
+    size_type nnz = 0;
+    for (const auto &elem : data.nonzeros) {
+        nnz += (elem.value != zero<ValueType>());
+    }
+    auto tmp =
+        SparsityCsr::create(this->get_executor()->get_master(), data.size, nnz);
+    size_type ind = 0;
+    size_type cur_ptr = 0;
+    tmp->get_row_ptrs()[0] = cur_ptr;
+    tmp->get_value()[0] = one<ValueType>();
+    for (size_type row = 0; row < data.size[0]; ++row) {
+        for (; ind < data.nonzeros.size(); ++ind) {
+            if (data.nonzeros[ind].row > row) {
+                break;
+            }
+            auto val = data.nonzeros[ind].value;
+            if (val != zero<ValueType>()) {
+                tmp->get_col_idxs()[cur_ptr] = data.nonzeros[ind].column;
+                ++cur_ptr;
+            }
+        }
+        tmp->get_row_ptrs()[row + 1] = cur_ptr;
+    }
+    tmp->move_to(this);
+}
+
+
+template <typename ValueType, typename IndexType>
 void SparsityCsr<ValueType, IndexType>::write(mat_data &data) const
 {
     std::unique_ptr<const LinOp> op{};

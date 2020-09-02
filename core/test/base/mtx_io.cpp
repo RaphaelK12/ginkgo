@@ -613,6 +613,12 @@ public:
 
     void read(const mat_data &data) override { data_ = data; }
 
+    void read(const mat_data &data,
+              const gko::Array<gko::size_type> &dist) override
+    {
+        GKO_NOT_IMPLEMENTED;
+    }
+
     void write(mat_data &data) const override { data = data_; }
 
 protected:
