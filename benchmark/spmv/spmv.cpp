@@ -30,13 +30,6 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ******************************<GINKGO LICENSE>*******************************/
 
-#include <ginkgo/config.hpp>
-
-#if GKO_HAVE_MPI
-#include <mpi.h>
-#endif
-
-
 #include <ginkgo/ginkgo.hpp>
 
 
@@ -145,11 +138,7 @@ int main(int argc, char *argv[])
     print_general_information(extra_information);
     std::string exec_string = FLAGS_executor;
     auto exec_substr = exec_string.substr(0, 3);
-    if (exec_substr == "mpi") {
-#if GKO_HAVE_MPI
-        GKO_ASSERT_NO_MPI_ERRORS(MPI_Init(&argc, &argv));
-#endif
-    }
+    gko::MpiExecutor::init_finalize(argc, argv, 1);
 
     auto exec = executor_factory.at(FLAGS_executor)();
     auto engine = get_engine();
@@ -238,9 +227,4 @@ int main(int argc, char *argv[])
     }
 
     std::cout << test_cases << std::endl;
-    if (exec_substr == "mpi") {
-#if GKO_HAVE_MPI
-        GKO_ASSERT_NO_MPI_ERRORS(MPI_Finalize());
-#endif
-    }
 }

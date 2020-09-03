@@ -45,17 +45,17 @@ version version_info::get_mpi_version() noexcept
     return {1, 0, 0, "not compiled"};
 }
 
-void MpiExecutor::mpi_init() {}
 
 int MpiExecutor::get_num_ranks() const { return 0; }
 
+
 int MpiExecutor::get_my_rank() const GKO_NOT_COMPILED(mpi);
 
+
 std::shared_ptr<MpiExecutor> MpiExecutor::create(
-    std::shared_ptr<Executor> sub_executor, int num_args, char **args)
+    std::shared_ptr<Executor> sub_executor)
 {
-    return std::shared_ptr<MpiExecutor>(
-        new MpiExecutor(sub_executor, num_args, args));
+    return std::shared_ptr<MpiExecutor>(new MpiExecutor(sub_executor));
 }
 
 
@@ -65,13 +65,19 @@ std::string MpiError::get_error(int64)
 }
 
 
-bool MpiExecutor::is_finalized() const GKO_NOT_COMPILED(mpi);
+bool MpiExecutor::init_finalize::is_finalized() GKO_NOT_COMPILED(mpi);
 
 
-bool MpiExecutor::is_initialized() const GKO_NOT_COMPILED(mpi);
+bool MpiExecutor::init_finalize::is_initialized() GKO_NOT_COMPILED(mpi);
 
 
-void MpiExecutor::destroy() GKO_NOT_COMPILED(mpi);
+MpiExecutor::init_finalize::init_finalize(int &argc, char **&argv,
+                                          const size_type num_threads)
+    GKO_NOT_COMPILED(mpi);
+
+
+MpiExecutor::init_finalize::~init_finalize() noexcept(false)
+    GKO_NOT_COMPILED(mpi);
 
 
 void MpiExecutor::synchronize_communicator(MPI_Comm &comm) const
@@ -81,8 +87,20 @@ void MpiExecutor::synchronize_communicator(MPI_Comm &comm) const
 void MpiExecutor::synchronize() const GKO_NOT_COMPILED(mpi);
 
 
+void MpiExecutor::set_communicator(MPI_Comm comm) GKO_NOT_COMPILED(mpi);
+
+
 MpiExecutor::request_manager<MPI_Request> MpiExecutor::create_requests_array(
     int size) GKO_NOT_COMPILED(mpi);
+
+
+MPI_Comm MpiExecutor::create_communicator(MPI_Comm &comm_in, int color, int key)
+    GKO_NOT_COMPILED(mpi);
+
+
+MPI_Op MpiExecutor::create_operation(
+    std::function<void(void *, void *, int *, MPI_Datatype *)> func, void *arg1,
+    void *arg2, int *len, MPI_Datatype *type) GKO_NOT_COMPILED(mpi);
 
 
 template <typename SendType>
@@ -138,10 +156,6 @@ template <typename SendType, typename RecvType>
 void MpiExecutor::scatter(const SendType *send_buffer, const int *send_counts,
                           const int *displacements, RecvType *recv_buffer,
                           const int recv_count, int root_rank) const
-    GKO_NOT_COMPILED(mpi);
-
-
-MPI_Comm MpiExecutor::create_communicator(MPI_Comm &comm_in, int color, int key)
     GKO_NOT_COMPILED(mpi);
 
 

@@ -47,15 +47,45 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 namespace gko {
 
 
-void MpiExecutor::mpi_init()
+bool MpiExecutor::init_finalize::is_initialized()
 {
-    auto flag = MpiExecutor::is_initialized();
+    int flag = 0;
+    GKO_ASSERT_NO_MPI_ERRORS(MPI_Initialized(&flag));
+    return flag;
+}
+
+
+bool MpiExecutor::init_finalize::is_finalized()
+{
+    int flag = 0;
+    GKO_ASSERT_NO_MPI_ERRORS(MPI_Finalized(&flag));
+    return flag;
+}
+
+
+MpiExecutor::init_finalize::init_finalize(int &argc, char **&argv,
+                                          const size_type num_threads)
+{
+    auto flag = is_initialized();
     if (!flag) {
+        this->required_thread_support_ = MPI_THREAD_SERIALIZED;
         GKO_ASSERT_NO_MPI_ERRORS(MPI_Init_thread(
             &(this->num_args_), &(this->args_), this->required_thread_support_,
             &(this->provided_thread_support_)));
+    } else {
+        GKO_MPI_INITIALIZED;
     }
-    this->mpi_comm_ = MPI_COMM_WORLD;
+}
+
+
+MpiExecutor::init_finalize::~init_finalize() noexcept(false)
+{
+    auto flag = is_finalized();
+    if (!flag) {
+        GKO_ASSERT_NO_MPI_ERRORS(MPI_Finalize());
+    } else {
+        GKO_MPI_FINALIZED;
+    }
 }
 
 
@@ -79,16 +109,22 @@ void MpiExecutor::synchronize() const
 }
 
 
-// MPI_Op MpiExecutor::create_operation(
-//     std::function<void(void *, void *, int *, MPI_Datatype *)> func, void
-//     *arg1, void *arg2, int *len, MPI_Datatype *type)
-// {
-//     MPI_Op operation;
-//     bindings::mpi::create_op(
-//         func.target<void(void *, void *, int *, MPI_Datatype *)>(), true,
-//         &operation);
-//     return operation;
-// }
+void MpiExecutor::set_communicator(MPI_Comm comm)
+{
+    if (comm) {
+        this->mpi_comm_ = comm;
+    } else {
+        this->mpi_comm_ = MPI_COMM_WORLD;
+    }
+}
+
+
+std::shared_ptr<MpiExecutor> MpiExecutor::create(
+    std::shared_ptr<Executor> sub_executor)
+{
+    return std::shared_ptr<MpiExecutor>(new MpiExecutor(sub_executor),
+                                        [](MpiExecutor *exec) { delete exec; });
+}
 
 
 int MpiExecutor::get_my_rank() const
@@ -105,6 +141,24 @@ int MpiExecutor::get_num_ranks() const
     GKO_ASSERT_NO_MPI_ERRORS(MPI_Comm_size(MPI_COMM_WORLD, &size));
     return size;
 }
+
+
+MPI_Comm MpiExecutor::create_communicator(MPI_Comm &comm_in, int color, int key)
+{
+    return bindings::mpi::create_comm(comm_in, color, key);
+}
+
+
+// MPI_Op MpiExecutor::create_operation(
+//     std::function<void(void *, void *, int *, MPI_Datatype *)> func, void
+//     *arg1, void *arg2, int *len, MPI_Datatype *type)
+// {
+//     MPI_Op operation;
+//     bindings::mpi::create_op(
+//         func.target<void(void *, void *, int *, MPI_Datatype *)>(), true,
+//         &operation);
+//     return operation;
+// }
 
 
 template <typename SendType>
@@ -232,46 +286,6 @@ void MpiExecutor::scatter(const SendType *send_buffer, const int *send_counts,
     bindings::mpi::scatterv(send_buffer, send_counts, displacements, send_type,
                             recv_buffer, recv_count, recv_type, root_rank,
                             this->mpi_comm_);
-}
-
-
-std::shared_ptr<MpiExecutor> MpiExecutor::create(
-    std::shared_ptr<Executor> sub_executor, int num_args, char **args)
-{
-    return std::shared_ptr<MpiExecutor>(
-        new MpiExecutor(sub_executor, num_args, args),
-        [](MpiExecutor *exec) { delete exec; });
-}
-
-
-bool MpiExecutor::is_initialized() const
-{
-    int flag = 0;
-    GKO_ASSERT_NO_MPI_ERRORS(MPI_Initialized(&flag));
-    return flag;
-}
-
-
-bool MpiExecutor::is_finalized() const
-{
-    int flag = 0;
-    GKO_ASSERT_NO_MPI_ERRORS(MPI_Finalized(&flag));
-    return flag;
-}
-
-
-void MpiExecutor::destroy()
-{
-    auto flag = MpiExecutor::is_finalized();
-    if (!flag) {
-        GKO_ASSERT_NO_MPI_ERRORS(MPI_Finalize());
-    }
-}
-
-
-MPI_Comm MpiExecutor::create_communicator(MPI_Comm &comm_in, int color, int key)
-{
-    return bindings::mpi::create_comm(comm_in, color, key);
 }
 
 

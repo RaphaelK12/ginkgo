@@ -90,7 +90,6 @@ using MPI_Op = int;
 #endif
 #endif
 
-
 namespace gko {
 
 
@@ -1392,8 +1391,12 @@ enum class op_type {
 
 
 /**
- * This is the Executor subclass which represents the MPI device
- * (typically CPU).
+ * This is the Executor subclass which represents a distributed executor.
+ *
+ * The MpiExecutor itself does not run any kernels. It needs to be created with
+ * a sub_executor which executes the kernels for its data. Hence it is assumed
+ * that that data has been distributed appropriately and delegates the kernel
+ * launches to the sub_executors.
  *
  * @ingroup exec_mpi
  * @ingroup Executor
@@ -1408,12 +1411,43 @@ public:
     template <typename T>
     using request_manager = std::unique_ptr<T, std::function<void(T *)>>;
 
+    /*
+     * Class that allows an RAII of initialization and calls MPI_Finalize at the
+     * end of its scope. Therefore, this must be called before an MpiExecutor is
+     * created.
+     */
+    class init_finalize {
+    public:
+        init_finalize(int &argc, char **&argv, const size_type num_threads);
+
+        init_finalize() = delete;
+
+        init_finalize(init_finalize &other) = delete;
+
+        init_finalize &operator=(const init_finalize &other) = delete;
+
+        init_finalize(init_finalize &&other) = delete;
+
+        init_finalize const &operator=(init_finalize &&other) = delete;
+
+        static bool is_finalized();
+
+        static bool is_initialized();
+
+        ~init_finalize() noexcept(false);
+
+    private:
+        int num_args_;
+        int required_thread_support_;
+        int provided_thread_support_;
+        char **args_;
+    };
+
     /**
      * Creates a new MpiExecutor.
      */
     static std::shared_ptr<MpiExecutor> create(
-        std::shared_ptr<Executor> sub_executor, int num_args = 0,
-        char **args = nullptr);
+        std::shared_ptr<Executor> sub_executor);
 
     std::shared_ptr<Executor> get_master() noexcept override;
 
@@ -1449,11 +1483,13 @@ public:
 
     void synchronize_communicator(MPI_Comm &comm) const;
 
+    void set_communicator(MPI_Comm comm);
+
     MPI_Comm create_communicator(MPI_Comm &comm, int color, int key);
 
-    // MPI_Op create_operation(
-    //     std::function<void(void *, void *, int *, MPI_Datatype *)> func,
-    //     void *arg1, void *arg2, int *len, MPI_Datatype *type);
+    MPI_Op create_operation(
+        std::function<void(void *, void *, int *, MPI_Datatype *)> func,
+        void *arg1, void *arg2, int *len, MPI_Datatype *type);
 
     request_manager<MPI_Request> create_requests_array(int size);
 
@@ -1519,34 +1555,20 @@ public:
 protected:
     MpiExecutor() = delete;
 
-    void mpi_init();
-
-    bool is_finalized() const;
-
-    bool is_initialized() const;
-
-    void destroy();
-
-    MpiExecutor(std::shared_ptr<Executor> sub_executor, int num_args,
-                char **args)
-        : num_ranks_(1),
-          num_args_(num_args),
-          args_(args),
-          sub_executor_(sub_executor)
+    MpiExecutor(std::shared_ptr<Executor> sub_executor)
+        : num_ranks_(1), sub_executor_(sub_executor)
     {
-        this->mpi_init();
-        num_ranks_ = this->get_num_ranks();
-        root_rank_ = 0;
+        GKO_ASSERT(init_finalize::is_initialized() &&
+                   !(init_finalize::is_finalized()));
+        this->num_ranks_ = this->get_num_ranks();
+        this->root_rank_ = 0;
+        // Set it to MPI_COMM_WORLD by default
+        this->set_communicator(MPI_COMM_WORLD);
     }
 
 private:
     int num_ranks_;
-    int num_args_;
     int root_rank_;
-    int required_thread_support_;
-    int provided_thread_support_;
-    char **args_;
-    // std::vector<std::string> sub_exec_list_;
     std::shared_ptr<Executor> sub_executor_;
 
     MPI_Comm mpi_comm_;

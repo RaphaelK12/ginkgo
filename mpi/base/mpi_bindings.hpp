@@ -76,6 +76,12 @@ inline void free_comm(MPI_Comm &comm)
 }
 
 
+// inline void create_op(MPI_User_function *func, int commute, MPI_Op *op)
+// {
+//     GKO_ASSERT_NO_MPI_ERRORS(MPI_Op_create(func, commute, op));
+// }
+
+
 inline void wait(MPI_Request *request, MPI_Status *status)
 {
     GKO_ASSERT_NO_MPI_ERRORS(MPI_Wait(request, status));
@@ -208,11 +214,6 @@ inline void scatterv(const void *send_buffer, const int *send_counts,
     GKO_ASSERT_NO_MPI_ERRORS(
         MPI_Scatterv(send_buffer, send_counts, displacements, send_type,
                      recv_buffer, recv_count, recv_type, root_rank, comm));
-}
-
-inline void create_op(MPI_User_function *func, int commute, MPI_Op *op)
-{
-    GKO_ASSERT_NO_MPI_ERRORS(MPI_Op_create(func, commute, op));
 }
 
 
