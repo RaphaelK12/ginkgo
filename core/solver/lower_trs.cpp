@@ -145,6 +145,14 @@ void LowerTrs<ValueType, IndexType>::apply_impl(const LinOp *alpha,
 }
 
 
+template <typename ValueType, typename IndexType>
+std::unique_ptr<LinOp> LowerTrs<ValueType, IndexType>::create_result_impl(
+    const LinOp *b) const
+{
+    return matrix::create_dense_result<ValueType>(this, b);
+}
+
+
 #define GKO_DECLARE_LOWER_TRS(_vtype, _itype) class LowerTrs<_vtype, _itype>
 GKO_INSTANTIATE_FOR_EACH_VALUE_AND_INDEX_TYPE(GKO_DECLARE_LOWER_TRS);
 

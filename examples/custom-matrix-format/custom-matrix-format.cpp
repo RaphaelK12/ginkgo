@@ -151,6 +151,12 @@ protected:
         dense_x->add_scaled(alpha, lend(tmp_x));
     }
 
+    std::unique_ptr<gko::LinOp> create_result_impl(
+        const gko::LinOp *b) const override
+    {
+        return gko::matrix::create_dense_result<ValueType>(this, b);
+    }
+
 private:
     coef_type coefficients;
 };

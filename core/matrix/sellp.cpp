@@ -124,6 +124,14 @@ void Sellp<ValueType, IndexType>::apply_impl(const LinOp *alpha, const LinOp *b,
 
 
 template <typename ValueType, typename IndexType>
+std::unique_ptr<LinOp> Sellp<ValueType, IndexType>::create_result_impl(
+    const LinOp *b) const
+{
+    return create_dense_result<ValueType>(this, b);
+}
+
+
+template <typename ValueType, typename IndexType>
 void Sellp<ValueType, IndexType>::convert_to(
     Sellp<next_precision<ValueType>, IndexType> *result) const
 {

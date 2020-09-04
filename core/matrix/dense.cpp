@@ -51,6 +51,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <ginkgo/core/matrix/sparsity_csr.hpp>
 
 
+#include "core/components/fill_array.hpp"
 #include "core/matrix/dense_kernels.hpp"
 
 
@@ -85,6 +86,7 @@ GKO_REGISTER_OPERATION(convert_to_hybrid, dense::convert_to_hybrid);
 GKO_REGISTER_OPERATION(convert_to_sellp, dense::convert_to_sellp);
 GKO_REGISTER_OPERATION(convert_to_sparsity_csr, dense::convert_to_sparsity_csr);
 GKO_REGISTER_OPERATION(extract_diagonal, dense::extract_diagonal);
+GKO_REGISTER_OPERATION(fill_array, components::fill_array);
 
 
 }  // namespace dense
@@ -225,6 +227,40 @@ void Dense<ValueType>::apply_impl(const LinOp *alpha, const LinOp *b,
     this->get_executor()->run(dense::make_apply(
         as<Dense<ValueType>>(alpha), this, as<Dense<ValueType>>(b),
         as<Dense<ValueType>>(beta), as<Dense<ValueType>>(x)));
+}
+
+
+// this will get instantiated for all ValueTypes by create_result_impl
+template <typename ValueType>
+std::unique_ptr<matrix::Dense<ValueType>> create_dense_result(const LinOp *A,
+                                                              const LinOp *b)
+{
+    using mtx = matrix::Dense<ValueType>;
+    auto exec = A->get_executor();
+    auto size = dim<2>{A->get_size()[0], b->get_size()[1]};
+    if (A->apply_uses_initial_guess()) {
+        if (b->get_size() == size) {
+            auto result = mtx::create(exec);
+            result->copy_from(b);
+            return result;
+        } else {
+            auto result = mtx::create(exec, size);
+            exec->run(matrix::dense::make_fill_array(
+                result->get_values(), result->get_num_stored_elements(),
+                zero<ValueType>()));
+            return result;
+        }
+    } else {
+        return mtx::create(exec, size);
+    }
+}
+
+
+template <typename ValueType>
+std::unique_ptr<LinOp> Dense<ValueType>::create_result_impl(
+    const LinOp *b) const
+{
+    return create_dense_result<ValueType>(this, b);
 }
 
 

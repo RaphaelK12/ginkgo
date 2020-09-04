@@ -88,6 +88,14 @@ void Coo<ValueType, IndexType>::apply_impl(const LinOp *alpha, const LinOp *b,
 
 
 template <typename ValueType, typename IndexType>
+std::unique_ptr<LinOp> Coo<ValueType, IndexType>::create_result_impl(
+    const LinOp *b) const
+{
+    return create_dense_result<ValueType>(this, b);
+}
+
+
+template <typename ValueType, typename IndexType>
 void Coo<ValueType, IndexType>::apply2_impl(const LinOp *b, LinOp *x) const
 {
     using Dense = Dense<ValueType>;

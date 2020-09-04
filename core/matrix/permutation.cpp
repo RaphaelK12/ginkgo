@@ -37,6 +37,16 @@ namespace gko {
 namespace matrix {
 
 
+template <typename IndexType>
+std::unique_ptr<LinOp> Permutation<IndexType>::create_result_impl(
+    const LinOp *b) const
+{
+    // throw an exception if b is not permutable
+    gko::as<Permutable<IndexType>>(b);
+    return b->clone();
+}
+
+
 #define GKO_DECLARE_PERMUTATION_MATRIX(_type) class Permutation<_type>
 GKO_INSTANTIATE_FOR_EACH_INDEX_TYPE(GKO_DECLARE_PERMUTATION_MATRIX);
 

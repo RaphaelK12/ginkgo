@@ -87,6 +87,14 @@ void SparsityCsr<ValueType, IndexType>::apply_impl(const LinOp *alpha,
 
 
 template <typename ValueType, typename IndexType>
+std::unique_ptr<LinOp> SparsityCsr<ValueType, IndexType>::create_result_impl(
+    const LinOp *b) const
+{
+    return create_dense_result<ValueType>(this, b);
+}
+
+
+template <typename ValueType, typename IndexType>
 void SparsityCsr<ValueType, IndexType>::read(const mat_data &data)
 {
     size_type nnz = 0;

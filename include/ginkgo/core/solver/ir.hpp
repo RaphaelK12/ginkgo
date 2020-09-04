@@ -208,6 +208,8 @@ protected:
     void apply_impl(const LinOp *alpha, const LinOp *b, const LinOp *beta,
                     LinOp *x) const override;
 
+    std::unique_ptr<LinOp> create_result_impl(const LinOp *b) const override;
+
     explicit Ir(std::shared_ptr<const Executor> exec)
         : EnableLinOp<Ir>(std::move(exec))
     {}

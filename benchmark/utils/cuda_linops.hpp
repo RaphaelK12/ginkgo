@@ -54,6 +54,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 namespace detail {
 
 
+template <typename ValueType>
 class CuspBase : public gko::LinOp {
 public:
     cusparseMatDescr_t get_descr() const { return this->descr_.get(); }
@@ -70,6 +71,12 @@ protected:
                     gko::LinOp *) const override
     {
         GKO_NOT_IMPLEMENTED;
+    }
+
+    std::unique_ptr<gko::LinOp> create_result_impl(
+        const gko::LinOp *b) const override
+    {
+        return gko::matrix::create_dense_result<ValueType>(this, b);
     }
 
     CuspBase(std::shared_ptr<const gko::Executor> exec,
@@ -123,11 +130,12 @@ private:
 template <typename ValueType = gko::default_precision,
           typename IndexType = gko::int32>
 class CuspCsrmp
-    : public gko::EnableLinOp<CuspCsrmp<ValueType, IndexType>, CuspBase>,
+    : public gko::EnableLinOp<CuspCsrmp<ValueType, IndexType>,
+                              CuspBase<ValueType>>,
       public gko::ReadableFromMatrixData<ValueType, IndexType>,
       public gko::EnableCreateMethod<CuspCsrmp<ValueType, IndexType>> {
     friend class gko::EnableCreateMethod<CuspCsrmp>;
-    friend class gko::EnablePolymorphicObject<CuspCsrmp, CuspBase>;
+    friend class gko::EnablePolymorphicObject<CuspCsrmp, CuspBase<ValueType>>;
 
 public:
     using csr = gko::matrix::Csr<ValueType, IndexType>;
@@ -165,7 +173,7 @@ protected:
 
     CuspCsrmp(std::shared_ptr<const gko::Executor> exec,
               const gko::dim<2> &size = gko::dim<2>{})
-        : gko::EnableLinOp<CuspCsrmp, CuspBase>(exec, size),
+        : gko::EnableLinOp<CuspCsrmp, CuspBase<ValueType>>(exec, size),
           csr_(std::move(
               csr::create(exec, std::make_shared<typename csr::classical>()))),
           trans_(CUSPARSE_OPERATION_NON_TRANSPOSE)
@@ -182,12 +190,12 @@ private:
 
 template <typename ValueType = gko::default_precision,
           typename IndexType = gko::int32>
-class CuspCsr
-    : public gko::EnableLinOp<CuspCsr<ValueType, IndexType>, CuspBase>,
-      public gko::EnableCreateMethod<CuspCsr<ValueType, IndexType>>,
-      public gko::ReadableFromMatrixData<ValueType, IndexType> {
+class CuspCsr : public gko::EnableLinOp<CuspCsr<ValueType, IndexType>,
+                                        CuspBase<ValueType>>,
+                public gko::EnableCreateMethod<CuspCsr<ValueType, IndexType>>,
+                public gko::ReadableFromMatrixData<ValueType, IndexType> {
     friend class gko::EnableCreateMethod<CuspCsr>;
-    friend class gko::EnablePolymorphicObject<CuspCsr, CuspBase>;
+    friend class gko::EnablePolymorphicObject<CuspCsr, CuspBase<ValueType>>;
 
 public:
     using csr = gko::matrix::Csr<ValueType, IndexType>;
@@ -225,7 +233,7 @@ protected:
 
     CuspCsr(std::shared_ptr<const gko::Executor> exec,
             const gko::dim<2> &size = gko::dim<2>{})
-        : gko::EnableLinOp<CuspCsr, CuspBase>(exec, size),
+        : gko::EnableLinOp<CuspCsr, CuspBase<ValueType>>(exec, size),
           csr_(std::move(
               csr::create(exec, std::make_shared<typename csr::classical>()))),
           trans_(CUSPARSE_OPERATION_NON_TRANSPOSE)
@@ -243,11 +251,12 @@ private:
 template <typename ValueType = gko::default_precision,
           typename IndexType = gko::int32>
 class CuspCsrmm
-    : public gko::EnableLinOp<CuspCsrmm<ValueType, IndexType>, CuspBase>,
+    : public gko::EnableLinOp<CuspCsrmm<ValueType, IndexType>,
+                              CuspBase<ValueType>>,
       public gko::EnableCreateMethod<CuspCsrmm<ValueType, IndexType>>,
       public gko::ReadableFromMatrixData<ValueType, IndexType> {
     friend class gko::EnableCreateMethod<CuspCsrmm>;
-    friend class gko::EnablePolymorphicObject<CuspCsrmm, CuspBase>;
+    friend class gko::EnablePolymorphicObject<CuspCsrmm, CuspBase<ValueType>>;
 
 public:
     using csr = gko::matrix::Csr<ValueType, IndexType>;
@@ -286,7 +295,7 @@ protected:
 
     CuspCsrmm(std::shared_ptr<const gko::Executor> exec,
               const gko::dim<2> &size = gko::dim<2>{})
-        : gko::EnableLinOp<CuspCsrmm, CuspBase>(exec, size),
+        : gko::EnableLinOp<CuspCsrmm, CuspBase<ValueType>>(exec, size),
           csr_(std::move(
               csr::create(exec, std::make_shared<typename csr::classical>()))),
           trans_(CUSPARSE_OPERATION_NON_TRANSPOSE)
@@ -307,11 +316,12 @@ private:
 template <typename ValueType = gko::default_precision,
           typename IndexType = gko::int32>
 class CuspCsrEx
-    : public gko::EnableLinOp<CuspCsrEx<ValueType, IndexType>, CuspBase>,
+    : public gko::EnableLinOp<CuspCsrEx<ValueType, IndexType>,
+                              CuspBase<ValueType>>,
       public gko::EnableCreateMethod<CuspCsrEx<ValueType, IndexType>>,
       public gko::ReadableFromMatrixData<ValueType, IndexType> {
     friend class gko::EnableCreateMethod<CuspCsrEx>;
-    friend class gko::EnablePolymorphicObject<CuspCsrEx, CuspBase>;
+    friend class gko::EnablePolymorphicObject<CuspCsrEx, CuspBase<ValueType>>;
 
 public:
     using csr = gko::matrix::Csr<ValueType, IndexType>;
@@ -386,7 +396,7 @@ protected:
 
     CuspCsrEx(std::shared_ptr<const gko::Executor> exec,
               const gko::dim<2> &size = gko::dim<2>{})
-        : gko::EnableLinOp<CuspCsrEx, CuspBase>(exec, size),
+        : gko::EnableLinOp<CuspCsrEx, CuspBase<ValueType>>(exec, size),
           csr_(std::move(
               csr::create(exec, std::make_shared<typename csr::classical>()))),
           trans_(CUSPARSE_OPERATION_NON_TRANSPOSE),
@@ -413,14 +423,14 @@ template <typename ValueType = gko::default_precision,
           typename IndexType = gko::int32,
           cusparseHybPartition_t Partition = CUSPARSE_HYB_PARTITION_AUTO,
           int Threshold = 0>
-class CuspHybrid
-    : public gko::EnableLinOp<
-          CuspHybrid<ValueType, IndexType, Partition, Threshold>, CuspBase>,
-      public gko::EnableCreateMethod<
-          CuspHybrid<ValueType, IndexType, Partition, Threshold>>,
-      public gko::ReadableFromMatrixData<ValueType, IndexType> {
+class CuspHybrid : public gko::EnableLinOp<
+                       CuspHybrid<ValueType, IndexType, Partition, Threshold>,
+                       CuspBase<ValueType>>,
+                   public gko::EnableCreateMethod<
+                       CuspHybrid<ValueType, IndexType, Partition, Threshold>>,
+                   public gko::ReadableFromMatrixData<ValueType, IndexType> {
     friend class gko::EnableCreateMethod<CuspHybrid>;
-    friend class gko::EnablePolymorphicObject<CuspHybrid, CuspBase>;
+    friend class gko::EnablePolymorphicObject<CuspHybrid, CuspBase<ValueType>>;
 
 public:
     using csr = gko::matrix::Csr<ValueType, IndexType>;
@@ -476,7 +486,7 @@ protected:
 
     CuspHybrid(std::shared_ptr<const gko::Executor> exec,
                const gko::dim<2> &size = gko::dim<2>{})
-        : gko::EnableLinOp<CuspHybrid, CuspBase>(exec, size),
+        : gko::EnableLinOp<CuspHybrid, CuspBase<ValueType>>(exec, size),
           trans_(CUSPARSE_OPERATION_NON_TRANSPOSE)
     {
         const auto id = this->get_gpu_exec()->get_device_id();
@@ -545,11 +555,12 @@ template <typename ValueType = gko::default_precision,
           cusparseSpMVAlg_t Alg = CUSPARSE_MV_ALG_DEFAULT>
 class CuspGenericCsr
     : public gko::EnableLinOp<CuspGenericCsr<ValueType, IndexType, Alg>,
-                              CuspBase>,
+                              CuspBase<ValueType>>,
       public gko::EnableCreateMethod<CuspGenericCsr<ValueType, IndexType, Alg>>,
       public gko::ReadableFromMatrixData<ValueType, IndexType> {
     friend class gko::EnableCreateMethod<CuspGenericCsr>;
-    friend class gko::EnablePolymorphicObject<CuspGenericCsr, CuspBase>;
+    friend class gko::EnablePolymorphicObject<CuspGenericCsr,
+                                              CuspBase<ValueType>>;
 
 public:
     using csr = gko::matrix::Csr<ValueType, IndexType>;
@@ -602,7 +613,7 @@ protected:
 
     CuspGenericCsr(std::shared_ptr<const gko::Executor> exec,
                    const gko::dim<2> &size = gko::dim<2>{})
-        : gko::EnableLinOp<CuspGenericCsr, CuspBase>(exec, size),
+        : gko::EnableLinOp<CuspGenericCsr, CuspBase<ValueType>>(exec, size),
           csr_(std::move(
               csr::create(exec, std::make_shared<typename csr::classical>()))),
           trans_(CUSPARSE_OPERATION_NON_TRANSPOSE)
@@ -621,11 +632,13 @@ private:
 template <typename ValueType = gko::default_precision,
           typename IndexType = gko::int32>
 class CuspGenericCoo
-    : public gko::EnableLinOp<CuspGenericCoo<ValueType, IndexType>, CuspBase>,
+    : public gko::EnableLinOp<CuspGenericCoo<ValueType, IndexType>,
+                              CuspBase<ValueType>>,
       public gko::EnableCreateMethod<CuspGenericCoo<ValueType, IndexType>>,
       public gko::ReadableFromMatrixData<ValueType, IndexType> {
     friend class gko::EnableCreateMethod<CuspGenericCoo>;
-    friend class gko::EnablePolymorphicObject<CuspGenericCoo, CuspBase>;
+    friend class gko::EnablePolymorphicObject<CuspGenericCoo,
+                                              CuspBase<ValueType>>;
 
 public:
     using coo = gko::matrix::Coo<ValueType, IndexType>;
@@ -678,7 +691,7 @@ protected:
 
     CuspGenericCoo(std::shared_ptr<const gko::Executor> exec,
                    const gko::dim<2> &size = gko::dim<2>{})
-        : gko::EnableLinOp<CuspGenericCoo, CuspBase>(exec, size),
+        : gko::EnableLinOp<CuspGenericCoo, CuspBase<ValueType>>(exec, size),
           coo_(std::move(coo::create(exec))),
           trans_(CUSPARSE_OPERATION_NON_TRANSPOSE)
     {}

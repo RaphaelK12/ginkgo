@@ -328,6 +328,8 @@ protected:
     void apply_impl(const LinOp *alpha, const LinOp *b, const LinOp *beta,
                     LinOp *x) const override;
 
+    std::unique_ptr<LinOp> create_result_impl(const LinOp *b) const override;
+
     size_type linearize_index(size_type row, size_type slice_set,
                               size_type col) const noexcept
     {

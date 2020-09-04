@@ -60,6 +60,14 @@ void Identity<ValueType>::apply_impl(const LinOp *alpha, const LinOp *b,
 
 
 template <typename ValueType>
+std::unique_ptr<LinOp> Identity<ValueType>::create_result_impl(
+    const LinOp *b) const
+{
+    return create_dense_result<ValueType>(this, b);
+}
+
+
+template <typename ValueType>
 std::unique_ptr<LinOp> IdentityFactory<ValueType>::generate_impl(
     std::shared_ptr<const LinOp> base) const
 {

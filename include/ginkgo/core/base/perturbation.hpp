@@ -154,6 +154,8 @@ protected:
     void apply_impl(const LinOp *alpha, const LinOp *b, const LinOp *beta,
                     LinOp *x) const override;
 
+    std::unique_ptr<LinOp> create_result_impl(const LinOp *b) const override;
+
     /**
      * Validates the dimensions of the `scalar`, `basis` and `projector`
      * parameters for the `apply`. scalar must be 1 by 1. The dimension of basis

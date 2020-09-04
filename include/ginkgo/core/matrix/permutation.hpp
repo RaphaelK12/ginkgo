@@ -233,6 +233,8 @@ protected:
         this->apply_impl(in, out);
     }
 
+    std::unique_ptr<LinOp> create_result_impl(const LinOp *b) const override;
+
 
 private:
     Array<index_type> permutation_;

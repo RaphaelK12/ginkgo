@@ -185,6 +185,11 @@ protected:
         approximate_inverse_->apply(alpha, b, beta, x);
     }
 
+    std::unique_ptr<LinOp> create_result_impl(const LinOp *b) const override
+    {
+        return matrix::create_dense_result<value_type>(this, b);
+    }
+
 private:
     /**
      * Generates the approximate inverse for a triangular matrix and

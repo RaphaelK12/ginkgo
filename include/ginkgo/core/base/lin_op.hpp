@@ -223,6 +223,43 @@ public:
     }
 
     /**
+     * Creates a LinOp `x` of the correct type and dimensions to store `op(b)`.
+     * The result of this method can then be used in calls to
+     * apply(const LinOp* b, LinOp* x).
+     *
+     * @param b  the LinOp onto which this LinOp will be applied
+     * @return the newly created LinOp. If apply_uses_initial_guess() is
+     *         `false`, the result may contain uninitialized data, so it should
+     *         not be used in advanced apply calls
+     *         apply(const LinOp*, const LinOp*, const LinOp*, LinOp*)
+     *         without prior initialization.
+     */
+    std::unique_ptr<LinOp> create_result(const LinOp *b) const
+    {
+        GKO_ASSERT_CONFORMANT(this, b);
+        return this->create_result_impl(b);
+    }
+
+    /**
+     * Applies a linear operator to a vector (or a sequence of vectors) and
+     * returns the result.
+     *
+     * Performs the operation x = op(b), where op is this linear operator.
+     * This is equivalent to calling LinOp::apply(const LinOp*, LinOp*) with the
+     * result from LinOp::create_result(const LinOp*).
+     *
+     * @param b  the input vector(s) on which the operator is applied
+     *
+     * @return the output vector(s) where the result is stored
+     */
+    std::unique_ptr<LinOp> apply_result(const LinOp *b) const
+    {
+        auto result = create_result(b);
+        this->apply(b, lend(result));
+        return result;
+    }
+
+    /**
      * Returns the size of the operator.
      *
      * @return size of the operator
@@ -279,6 +316,21 @@ protected:
      */
     virtual void apply_impl(const LinOp *alpha, const LinOp *b,
                             const LinOp *beta, LinOp *x) const = 0;
+
+    /**
+     * Implementers of LinOp should override this function instead of
+     * create_result(const LinOp*).
+     *
+     * @param b  the LinOp onto which this LinOp will be applied
+     * @return the newly created LinOp. If apply_uses_initial_guess() is
+     *         `false`, the result may contain uninitialized data, so it should
+     *         not be used in advanced apply calls
+     *         apply(const LinOp*, const LinOp*, const LinOp*, LinOp*)
+     *         without prior initialization.
+     *         If apply_uses_initial_guess() is `true`, the result will be
+     * initialized with `b`
+     */
+    virtual std::unique_ptr<LinOp> create_result_impl(const LinOp *b) const = 0;
 
     /**
      * Throws a DimensionMismatch exception if the parameters to `apply` are of

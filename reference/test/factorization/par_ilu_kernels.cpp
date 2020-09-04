@@ -70,6 +70,12 @@ protected:
     void apply_impl(const gko::LinOp *alpha, const gko::LinOp *b,
                     const gko::LinOp *beta, gko::LinOp *x) const override
     {}
+
+    std::unique_ptr<gko::LinOp> create_result_impl(
+        const gko::LinOp *) const override
+    {
+        GKO_NOT_IMPLEMENTED;
+    }
 };
 
 

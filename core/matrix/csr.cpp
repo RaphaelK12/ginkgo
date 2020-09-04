@@ -132,6 +132,23 @@ void Csr<ValueType, IndexType>::apply_impl(const LinOp *alpha, const LinOp *b,
 
 
 template <typename ValueType, typename IndexType>
+std::unique_ptr<LinOp> Csr<ValueType, IndexType>::create_result_impl(
+    const LinOp *b) const
+{
+    // SpGEMM/SpGEAM returns a Csr matrix of the same strategy
+    if (dynamic_cast<const Identity<ValueType> *>(b) ||
+        dynamic_cast<const Csr<ValueType, IndexType> *>(b)) {
+        auto size = dim<2>{this->get_size()[0], b->get_size()[1]};
+        return Csr<ValueType, IndexType>::create(this->get_executor(), size, 0,
+                                                 this->get_strategy());
+    }
+    // throw an exception if b is not Dense
+    gko::as<Dense<ValueType>>(b);
+    return create_dense_result<ValueType>(this, b);
+}
+
+
+template <typename ValueType, typename IndexType>
 void Csr<ValueType, IndexType>::convert_to(
     Csr<next_precision<ValueType>, IndexType> *result) const
 {

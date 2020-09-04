@@ -307,6 +307,8 @@ protected:
 
     void apply2_impl(const LinOp *alpha, const LinOp *b, LinOp *x) const;
 
+    std::unique_ptr<LinOp> create_result_impl(const LinOp *b) const override;
+
 private:
     Array<value_type> values_;
     Array<index_type> col_idxs_;

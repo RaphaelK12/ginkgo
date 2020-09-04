@@ -187,6 +187,14 @@ void Composition<ValueType>::apply_impl(const LinOp *alpha, const LinOp *b,
 }
 
 
+template <typename ValueType>
+std::unique_ptr<LinOp> Composition<ValueType>::create_result_impl(
+    const LinOp *b) const
+{
+    return matrix::create_dense_result<ValueType>(this, b);
+}
+
+
 #define GKO_DECLARE_COMPOSITION(_type) class Composition<_type>
 GKO_INSTANTIATE_FOR_EACH_VALUE_TYPE(GKO_DECLARE_COMPOSITION);
 

@@ -53,6 +53,7 @@ namespace detail {
 struct hipsparseMatDescr;
 
 
+template <typename ValueType>
 class HipspBase : public gko::LinOp {
 public:
     hipsparseMatDescr_t get_descr() const { return this->descr_.get(); }
@@ -64,6 +65,12 @@ protected:
                     gko::LinOp *) const override
     {
         GKO_NOT_IMPLEMENTED;
+    }
+
+    std::unique_ptr<gko::LinOp> create_result_impl(
+        const gko::LinOp *b) const override
+    {
+        return gko::matrix::create_dense_result<ValueType>(this, b);
     }
 
     HipspBase(std::shared_ptr<const gko::Executor> exec,
@@ -114,12 +121,12 @@ private:
 
 template <typename ValueType = gko::default_precision,
           typename IndexType = gko::int32>
-class HipspCsr
-    : public gko::EnableLinOp<HipspCsr<ValueType, IndexType>, HipspBase>,
-      public gko::EnableCreateMethod<HipspCsr<ValueType, IndexType>>,
-      public gko::ReadableFromMatrixData<ValueType, IndexType> {
+class HipspCsr : public gko::EnableLinOp<HipspCsr<ValueType, IndexType>,
+                                         HipspBase<ValueType>>,
+                 public gko::EnableCreateMethod<HipspCsr<ValueType, IndexType>>,
+                 public gko::ReadableFromMatrixData<ValueType, IndexType> {
     friend class gko::EnableCreateMethod<HipspCsr>;
-    friend class gko::EnablePolymorphicObject<HipspCsr, HipspBase>;
+    friend class gko::EnablePolymorphicObject<HipspCsr, HipspBase<ValueType>>;
 
 public:
     using csr = gko::matrix::Csr<ValueType, IndexType>;
@@ -157,7 +164,7 @@ protected:
 
     HipspCsr(std::shared_ptr<const gko::Executor> exec,
              const gko::dim<2> &size = gko::dim<2>{})
-        : gko::EnableLinOp<HipspCsr, HipspBase>(exec, size),
+        : gko::EnableLinOp<HipspCsr, HipspBase<ValueType>>(exec, size),
           csr_(std::move(
               csr::create(exec, std::make_shared<typename csr::classical>()))),
           trans_(HIPSPARSE_OPERATION_NON_TRANSPOSE)
@@ -175,11 +182,12 @@ private:
 template <typename ValueType = gko::default_precision,
           typename IndexType = gko::int32>
 class HipspCsrmm
-    : public gko::EnableLinOp<HipspCsrmm<ValueType, IndexType>, HipspBase>,
+    : public gko::EnableLinOp<HipspCsrmm<ValueType, IndexType>,
+                              HipspBase<ValueType>>,
       public gko::EnableCreateMethod<HipspCsrmm<ValueType, IndexType>>,
       public gko::ReadableFromMatrixData<ValueType, IndexType> {
     friend class gko::EnableCreateMethod<HipspCsrmm>;
-    friend class gko::EnablePolymorphicObject<HipspCsrmm, HipspBase>;
+    friend class gko::EnablePolymorphicObject<HipspCsrmm, HipspBase<ValueType>>;
 
 public:
     using csr = gko::matrix::Csr<ValueType, IndexType>;
@@ -218,7 +226,7 @@ protected:
 
     HipspCsrmm(std::shared_ptr<const gko::Executor> exec,
                const gko::dim<2> &size = gko::dim<2>{})
-        : gko::EnableLinOp<HipspCsrmm, HipspBase>(exec, size),
+        : gko::EnableLinOp<HipspCsrmm, HipspBase<ValueType>>(exec, size),
           csr_(std::move(
               csr::create(exec, std::make_shared<typename csr::classical>()))),
           trans_(HIPSPARSE_OPERATION_NON_TRANSPOSE)
@@ -239,12 +247,14 @@ template <typename ValueType = gko::default_precision,
           int Threshold = 0>
 class HipspHybrid
     : public gko::EnableLinOp<
-          HipspHybrid<ValueType, IndexType, Partition, Threshold>, HipspBase>,
+          HipspHybrid<ValueType, IndexType, Partition, Threshold>,
+          HipspBase<ValueType>>,
       public gko::EnableCreateMethod<
           HipspHybrid<ValueType, IndexType, Partition, Threshold>>,
       public gko::ReadableFromMatrixData<ValueType, IndexType> {
     friend class gko::EnableCreateMethod<HipspHybrid>;
-    friend class gko::EnablePolymorphicObject<HipspHybrid, HipspBase>;
+    friend class gko::EnablePolymorphicObject<HipspHybrid,
+                                              HipspBase<ValueType>>;
 
 public:
     using csr = gko::matrix::Csr<ValueType, IndexType>;
@@ -300,7 +310,7 @@ protected:
 
     HipspHybrid(std::shared_ptr<const gko::Executor> exec,
                 const gko::dim<2> &size = gko::dim<2>{})
-        : gko::EnableLinOp<HipspHybrid, HipspBase>(exec, size),
+        : gko::EnableLinOp<HipspHybrid, HipspBase<ValueType>>(exec, size),
           trans_(HIPSPARSE_OPERATION_NON_TRANSPOSE)
     {
         const auto id = this->get_gpu_exec()->get_device_id();

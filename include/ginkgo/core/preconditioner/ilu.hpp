@@ -232,6 +232,11 @@ protected:
         }
     }
 
+    std::unique_ptr<LinOp> create_result_impl(const LinOp *b) const override
+    {
+        return matrix::create_dense_result<value_type>(this, b);
+    }
+
     explicit Ilu(std::shared_ptr<const Executor> exec)
         : EnableLinOp<Ilu>(std::move(exec))
     {}

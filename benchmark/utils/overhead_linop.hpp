@@ -188,6 +188,11 @@ protected:
         dense_x->add_scaled(alpha, x_clone.get());
     }
 
+    std::unique_ptr<LinOp> create_result_impl(const LinOp *) const override
+    {
+        GKO_NOT_IMPLEMENTED;
+    }
+
     explicit Overhead(std::shared_ptr<const Executor> exec)
         : EnableLinOp<Overhead>(std::move(exec))
     {}

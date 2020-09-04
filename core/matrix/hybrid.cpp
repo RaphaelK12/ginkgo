@@ -116,6 +116,14 @@ void Hybrid<ValueType, IndexType>::apply_impl(const LinOp *alpha,
 
 
 template <typename ValueType, typename IndexType>
+std::unique_ptr<LinOp> Hybrid<ValueType, IndexType>::create_result_impl(
+    const LinOp *b) const
+{
+    return create_dense_result<ValueType>(this, b);
+}
+
+
+template <typename ValueType, typename IndexType>
 void Hybrid<ValueType, IndexType>::convert_to(
     Hybrid<next_precision<ValueType>, IndexType> *result) const
 {

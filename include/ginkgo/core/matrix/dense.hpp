@@ -535,6 +535,8 @@ protected:
     void apply_impl(const LinOp *alpha, const LinOp *b, const LinOp *beta,
                     LinOp *x) const override;
 
+    std::unique_ptr<LinOp> create_result_impl(const LinOp *b) const override;
+
     size_type linearize_index(size_type row, size_type col) const noexcept
     {
         return row * stride_ + col;
@@ -549,7 +551,27 @@ protected:
 private:
     Array<value_type> values_;
     size_type stride_;
-};  // namespace matrix
+};
+
+
+/**
+ * Creates and initializes a Dense matrix to contain the product A*b.
+ * This is an auxiliary function to be used in LinOp::create_result_impl.
+ *
+ * @tparam ValueType  the value type used for the result of the product A*b.
+ *
+ * @param A  the first LinOp
+ * @param b  the second LinOp
+ *
+ * @return a newly created Dense<ValueType> LinOp on the same executor as A.
+ *         It has the dimensions of A*b and is uninitialized by default,
+ *         unless A->apply_uses_initial_guess() is `true`, where it is
+ *         initialized with the value of b (if A is square) or
+ *         zero (if A is rectangular).
+ */
+template <typename ValueType>
+std::unique_ptr<matrix::Dense<ValueType>> create_dense_result(const LinOp *A,
+                                                              const LinOp *b);
 
 
 }  // namespace matrix

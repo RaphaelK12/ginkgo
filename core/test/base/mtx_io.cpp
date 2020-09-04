@@ -622,6 +622,12 @@ protected:
                     const gko::LinOp *beta, gko::LinOp *x) const override
     {}
 
+    std::unique_ptr<gko::LinOp> create_result_impl(
+        const gko::LinOp *) const override
+    {
+        GKO_NOT_IMPLEMENTED;
+    }
+
     explicit DummyLinOp(std::shared_ptr<const gko::Executor> exec)
         : gko::EnableLinOp<DummyLinOp>(exec)
     {}

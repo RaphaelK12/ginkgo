@@ -682,6 +682,8 @@ protected:
     void apply_impl(const LinOp *alpha, const LinOp *b, const LinOp *beta,
                     LinOp *x) const override;
 
+    std::unique_ptr<LinOp> create_result_impl(const LinOp *b) const override;
+
 private:
     std::shared_ptr<ell_type> ell_;
     std::shared_ptr<coo_type> coo_;

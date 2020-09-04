@@ -119,6 +119,14 @@ void Diagonal<ValueType>::apply_impl(const LinOp *alpha, const LinOp *b,
 
 
 template <typename ValueType>
+std::unique_ptr<LinOp> Diagonal<ValueType>::create_result_impl(
+    const LinOp *b) const
+{
+    return create_dense_result<ValueType>(this, b);
+}
+
+
+template <typename ValueType>
 std::unique_ptr<LinOp> Diagonal<ValueType>::transpose() const
 {
     return this->clone();

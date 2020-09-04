@@ -55,6 +55,11 @@ struct DummyOperator : public gko::EnableLinOp<DummyOperator> {
     void apply_impl(const LinOp *alpha, const LinOp *b, const LinOp *beta,
                     LinOp *x) const override
     {}
+
+    std::unique_ptr<LinOp> create_result_impl(const LinOp *) const override
+    {
+        GKO_NOT_IMPLEMENTED;
+    }
 };
 
 
