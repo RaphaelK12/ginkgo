@@ -7,8 +7,10 @@ function(setup_example_target target_name)
     target_include_directories(${target_name} PRIVATE ${PROJECT_SOURCE_DIR})
 endfunction()
 
+set(EXAMPLES_EXEC_LIST "adaptiveprecision-blockjacobi;custom-logger;ginkgo-overhead;ginkgo-ranges;ilu-preconditioned-solver;ir-ilu-preconditioned-solver;inverse-iteration;iterative-refinement;mixed-precision-ir;nine-pt-stencil-solver;performance-debugging;poisson-solver;preconditioned-solver;preconditioner-export;simple-solver;simple-solver-logging;three-pt-stencil-solver;")
 
-set(EXAMPLES_LIST "custom-logger;custom-matrix-format;custom-stopping-criterion;adaptiveprecision-blockjacobi;ginkgo-overhead;ginkgo-ranges;ilu-preconditioned-solver;ir-ilu-preconditioned-solver;inverse-iteration;iterative-refinement;minimal-cuda-solver;mixed-precision-ir;nine-pt-stencil-solver;papi-logging;performance-debugging;poisson-solver;preconditioned-solver;preconditioner-export;simple-solver;simple-solver-logging;three-pt-stencil-solver;")
+set(EXAMPLES_LIST "${EXAMPLES_EXEC_LIST};custom-matrix-format;custom-stopping-criterion;minimal-cuda-solver;papi-logging")
+
 if(GINKGO_BUILD_EXTLIB_EXAMPLE)
     set(EXAMPLES_LIST "${EXAMPLES_LIST};external-lib-interfacing")
 endif()
@@ -25,3 +27,9 @@ if(GINKGO_RUN_EXAMPLES)
             WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/${example})
     endforeach()
 endif()
+
+set(OUT_FILE "${CMAKE_BINARY_DIR}/example-targets.txt")
+file(WRITE ${OUT_FILE} "")
+foreach(example ${EXAMPLES_EXEC_LIST})
+    file(APPEND ${OUT_FILE} "run-${example}\n")
+endforeach()
